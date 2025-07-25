@@ -1,10 +1,8 @@
-import json
 import os
 import random
 import tempfile
 import math
 from pathlib import Path
-from typing import Any
 
 import boto3
 import httpx
@@ -16,10 +14,8 @@ from sqlalchemy import (
     String,
     ForeignKey,
     select,
-    update,
 )
 from sqlalchemy.orm import sessionmaker, relationship, Mapped, declarative_base
-from sqlalchemy.types import TypeDecorator
 
 S3_BUCKET_NAME = "python-test-bucket"
 CHUNK_SIZE = 5 * 1024 * 1024  # 10MB

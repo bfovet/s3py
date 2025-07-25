@@ -1,0 +1,1 @@
+https://github.com/minio/mc/issues/3599

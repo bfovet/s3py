@@ -1,3 +1,4 @@
+import asyncio
 import os
 import random
 import tempfile
@@ -6,6 +7,7 @@ from pathlib import Path
 
 import boto3
 import httpx
+from httpx import Response
 from pydantic import BaseModel
 from sqlalchemy import (
     create_engine,
@@ -182,7 +184,7 @@ def upload_part(request: UploadPartRequest) -> dict[str, bool]:
     return {"success": True}
 
 
-def complete_upload(request: CompleteUploadRequest):
+def complete_upload(request: CompleteUploadRequest) -> dict[str, str]:
     result = session.execute(
         select(Upload).where(
             Upload.upload_id == request.upload_id,
@@ -208,7 +210,7 @@ def complete_upload(request: CompleteUploadRequest):
         )
 
         s3_parts = {
-            part["PartNumber"]: part for part in parts_response.get("Parts", [])
+            part["PartNumber"]: part for part in parts_response.get("Parts", []) # type: ignore
         }
         print(f"Parts found in S3: {len(s3_parts)}")
 
@@ -218,7 +220,7 @@ def complete_upload(request: CompleteUploadRequest):
                 raise ValueError(f"Part {part.part_number} not found in S3")
 
             s3_part = s3_parts[part.part_number]
-            part_size = s3_part["Size"]
+            part_size = s3_part["Size"] # type: ignore
 
             # Check minimum size requirement (5MB except for last part)
             min_size = 5 * 1024 * 1024  # 5MB
@@ -281,6 +283,9 @@ class ChunkedBinaryReader:
             self.file.close()
 
     def read_chunks(self):
+        if self.file is None:
+            raise RuntimeError("File not opened. Use this class with a 'with' statement.")
+
         while True:
             chunk = self.file.read(self.chunk_size)
             if not chunk:
@@ -314,7 +319,7 @@ def generate_random_file():
     os.replace(file_path, final_path)
 
 
-if __name__ == "__main__":
+def sync_upload():
     if not Path("file.bin").exists():
         generate_random_file()
 
@@ -329,8 +334,8 @@ if __name__ == "__main__":
 
     with ChunkedBinaryReader(file_to_upload, CHUNK_SIZE) as reader:
         for index, chunk in enumerate(reader.read_chunks(), start=1):
-            print(f"chunk_size={len(chunk)}")
-            print(f"index={index}/{num_chunks}")
+            # print(f"chunk_size={len(chunk)}")
+            # print(f"index={index}/{num_chunks}")
             signed_url = get_signed_url(
                 start_upload_response["upload_id"], start_upload_response["key"], index
             )
@@ -374,3 +379,74 @@ if __name__ == "__main__":
     )
 
     print(response)
+
+
+async def upload_to_presigned_url(presigned_url: str,
+                                  chunk: bytes) -> Response:
+    async with httpx.AsyncClient() as client:
+        response = await client.put(url=presigned_url, content=chunk, timeout=None)
+
+    return response
+
+
+async def async_upload():
+    if not Path("file.bin").exists():
+        generate_random_file()
+
+    file_to_upload = Path("file.bin")
+    file_size = file_to_upload.stat().st_size
+    num_chunks = math.ceil(file_size / CHUNK_SIZE)
+
+    upload_request = StartUploadRequest(
+        filename="file.bin", content_type="application/octet-stream", user_id="user123"
+    )
+    start_upload_response = start_upload(upload_request)
+
+    async with asyncio.TaskGroup() as tg:
+        tasks = []
+
+        with ChunkedBinaryReader(file_to_upload, CHUNK_SIZE) as reader:
+            for index, chunk in enumerate(reader.read_chunks(), start=1):
+                signed_url = get_signed_url(
+                    start_upload_response["upload_id"], start_upload_response["key"], index
+                )
+
+                presigned_url = signed_url["signed_url"]
+                print(f"Chunk {index} presigned URL generated: {presigned_url}")
+
+                task = tg.create_task(
+                    upload_to_presigned_url(presigned_url, chunk)
+                )
+                tasks.append(task)
+
+        upload_results = [await task for task in tasks]
+
+    etags = []
+    for index, httpx_upload_response in enumerate(upload_results, start=1):
+        tag_from_header = httpx_upload_response.headers.get("ETag")
+        etags.append({"ETag": tag_from_header, "PartNumber": index})
+        print(f"Chunk {index} ETag: {tag_from_header}")
+        result = upload_part(
+            UploadPartRequest(
+                upload_id=start_upload_response["upload_id"],
+                key=start_upload_response["key"],
+                part_number=index,
+                etag=tag_from_header,
+                user_id="user123",
+            )
+        )
+
+    response = complete_upload(
+        CompleteUploadRequest(
+            upload_id=start_upload_response["upload_id"],
+            key=start_upload_response["key"],
+            user_id="user123",
+        )
+    )
+
+    print(response)
+
+
+if __name__ == "__main__":
+    asyncio.run(async_upload())
+    # sync_upload()

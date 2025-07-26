@@ -1,23 +1,16 @@
 import asyncio
+import math
 import os
 import random
 import tempfile
-import math
 from pathlib import Path
 
 import boto3
 import httpx
 from httpx import Response
 from pydantic import BaseModel
-from sqlalchemy import (
-    create_engine,
-    Column,
-    Integer,
-    String,
-    ForeignKey,
-    select,
-)
-from sqlalchemy.orm import sessionmaker, relationship, Mapped, declarative_base
+from sqlalchemy import Column, create_engine, ForeignKey, Integer, select, String
+from sqlalchemy.orm import declarative_base, Mapped, relationship, sessionmaker
 
 S3_BUCKET_NAME = "python-test-bucket"
 CHUNK_SIZE = 5 * 1024 * 1024  # 10MB
@@ -210,7 +203,8 @@ def complete_upload(request: CompleteUploadRequest) -> dict[str, str]:
         )
 
         s3_parts = {
-            part["PartNumber"]: part for part in parts_response.get("Parts", []) # type: ignore
+            part["PartNumber"]: part  # type: ignore
+            for part in parts_response.get("Parts", [])
         }
         print(f"Parts found in S3: {len(s3_parts)}")
 
@@ -220,7 +214,7 @@ def complete_upload(request: CompleteUploadRequest) -> dict[str, str]:
                 raise ValueError(f"Part {part.part_number} not found in S3")
 
             s3_part = s3_parts[part.part_number]
-            part_size = s3_part["Size"] # type: ignore
+            part_size = s3_part["Size"]  # type: ignore
 
             # Check minimum size requirement (5MB except for last part)
             min_size = 5 * 1024 * 1024  # 5MB
@@ -284,7 +278,9 @@ class ChunkedBinaryReader:
 
     def read_chunks(self):
         if self.file is None:
-            raise RuntimeError("File not opened. Use this class with a 'with' statement.")
+            raise RuntimeError(
+                "File not opened. Use this class with a 'with' statement."
+            )
 
         while True:
             chunk = self.file.read(self.chunk_size)
@@ -367,6 +363,10 @@ def sync_upload():
                 )
             )
 
+            # TODO: check result
+            if not result["success"]:
+                pass
+
             progress = round((index / num_chunks) * 100)
             print(f"Uploading...{progress}%")
 
@@ -381,8 +381,7 @@ def sync_upload():
     print(response)
 
 
-async def upload_to_presigned_url(presigned_url: str,
-                                  chunk: bytes) -> Response:
+async def upload_to_presigned_url(presigned_url: str, chunk: bytes) -> Response:
     async with httpx.AsyncClient() as client:
         response = await client.put(url=presigned_url, content=chunk, timeout=None)
 
@@ -394,8 +393,8 @@ async def async_upload():
         generate_random_file()
 
     file_to_upload = Path("file.bin")
-    file_size = file_to_upload.stat().st_size
-    num_chunks = math.ceil(file_size / CHUNK_SIZE)
+    # file_size = file_to_upload.stat().st_size
+    # num_chunks = math.ceil(file_size / CHUNK_SIZE)
 
     upload_request = StartUploadRequest(
         filename="file.bin", content_type="application/octet-stream", user_id="user123"
@@ -408,15 +407,15 @@ async def async_upload():
         with ChunkedBinaryReader(file_to_upload, CHUNK_SIZE) as reader:
             for index, chunk in enumerate(reader.read_chunks(), start=1):
                 signed_url = get_signed_url(
-                    start_upload_response["upload_id"], start_upload_response["key"], index
+                    start_upload_response["upload_id"],
+                    start_upload_response["key"],
+                    index,
                 )
 
                 presigned_url = signed_url["signed_url"]
                 print(f"Chunk {index} presigned URL generated: {presigned_url}")
 
-                task = tg.create_task(
-                    upload_to_presigned_url(presigned_url, chunk)
-                )
+                task = tg.create_task(upload_to_presigned_url(presigned_url, chunk))
                 tasks.append(task)
 
         upload_results = [await task for task in tasks]
@@ -435,6 +434,10 @@ async def async_upload():
                 user_id="user123",
             )
         )
+
+        # TODO: check result
+        if not result["success"]:
+            pass
 
     response = complete_upload(
         CompleteUploadRequest(

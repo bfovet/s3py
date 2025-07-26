@@ -1,20 +1,28 @@
 [project]
-name = "minio-upload-file"
+name = "s3py"
 version = "0.1.0"
-description = "Add your description here"
+description = "Upload and download files from S3"
 readme = "README.md"
+authors = [
+    { name = "Benjamin Fovet", email = "b.fovet@gmail.com" }
+]
 requires-python = ">=3.12"
 dependencies = [
     "boto3>=1.39.12",
     "boto3-stubs[s3]>=1.39.12",
+    "fastapi[standard]>=0.116.1",
+    "httptools>=0.6.4",
     "httpx>=0.28.1",
     "minio>=7.2.16",
     "pydantic>=2.11.7",
     "ruff>=0.12.5",
     "sqlalchemy>=2.0.41",
+    "uvloop>=0.21.0",
 ]
 
-[dependency-groups]
-dev = [
-    "reorder-python-imports>=3.15.0",
-]
+[project.scripts]
+s3py = "s3py.main:main"
+
+[build-system]
+requires = ["uv_build>=0.8.3,<0.9.0"]
+build-backend = "uv_build"

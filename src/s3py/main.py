@@ -1,9 +1,11 @@
 import uvicorn
-from fastapi import FastAPI, status
+from fastapi import status
 
+from s3py.api import router
 from s3py.models import HealthCheck
+from s3py.setup import create_application, lifespan_factory
 
-app = FastAPI()
+app = create_application(router=router, lifespan=lifespan_factory())
 
 
 @app.get(

@@ -1,12 +1,13 @@
 from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.params import Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.status import HTTP_201_CREATED, HTTP_200_OK
 
 from s3py.database import get_db
-from s3py.models import StartUploadRequest, Upload
+from s3py.models import StartUploadRequest, UploadPartRequest, Upload, Part
 from s3py.s3 import s3_client, S3_BUCKET_NAME
 
 router = APIRouter(tags=["files"])
@@ -82,3 +83,54 @@ def get_presigned_url(upload_id: str, key: str, part_number: int) -> dict[str, s
     )
 
     return {"presigned_url": presigned_url}
+
+
+@router.post(
+    "/upload-part",
+    summary="Record a successfully uploaded part",
+    description="Updates the database with information about an uploaded part",
+    status_code=HTTP_201_CREATED,
+)
+async def upload_part(
+    request: UploadPartRequest, db: Annotated[AsyncSession, Depends(get_db)]
+) -> dict[str, bool]:
+    """
+    Record a part that was successfully uploaded to S3:
+
+    - Updates the database with the ETag returned from S3
+    - Tracks the part number for later assembly
+    - Sets the upload status to "in-progress"
+
+    The client should call this after successfully uploading a part using the presigned URL.
+    """
+    result = await db.execute(
+        select(Upload).where(
+            Upload.upload_id == request.upload_id,
+            Upload.key == request.key,
+            Upload.user_id == request.user_id,
+        )
+    )
+
+    curr = result.one_or_none()
+    if curr is None:
+        raise HTTPException(status_code=404, detail="Upload not found")
+
+    upload = curr[0]
+    part = Part(
+        upload_id=request.upload_id,
+        user_id=request.user_id,
+        key=request.key,
+        etag=request.etag,
+        part_number=request.part_number,
+        upload=upload,
+    )
+    db.add(part)
+    await db.commit()
+    await db.refresh(part)
+
+    upload.status = "in-progress"
+    upload.parts.append(part)
+    await db.commit()
+    await db.refresh(upload)
+
+    return {"success": True}

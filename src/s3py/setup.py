@@ -30,7 +30,8 @@ def lifespan_factory(
         from asyncio import Event
 
         initialization_complete = Event()
-        app.state.initialization_complete = initialization_complete
+        # FIXME: https://github.com/Kludex/fastapi-tips?tab=readme-ov-file#6-use-lifespan-state-instead-of-appstate
+        # app.state.initialization_complete = initialization_complete
 
         await set_threadpool_tokens()
 
@@ -40,7 +41,7 @@ def lifespan_factory(
 
             initialization_complete.set()
 
-            yield
+            yield {"initialization_complete": initialization_complete}
         finally:
             pass
 

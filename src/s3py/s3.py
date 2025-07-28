@@ -1,6 +1,7 @@
 import boto3
 
 
+# TODO: use aioboto3
 s3_client = boto3.client(
     "s3",
     endpoint_url="http://localhost:9000",

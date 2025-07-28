@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter
 from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.status import HTTP_201_CREATED
+from starlette.status import HTTP_201_CREATED, HTTP_200_OK
 
 from s3py.database import get_db
 from s3py.models import StartUploadRequest, Upload
@@ -30,6 +30,7 @@ async def start_upload(
 
     The client should use this endpoint before uploading any file parts.
     """
+    # TODO: needs to be async
     response = s3_client.create_multipart_upload(
         Bucket=S3_BUCKET_NAME, Key=request.filename, ContentType=request.content_type
     )
@@ -50,3 +51,34 @@ async def start_upload(
         raise e
 
     return {"upload_id": response["UploadId"], "key": response["Key"]}
+
+
+@router.get(
+    "/presigned-url",
+    summary="Get a presigned URL for part upload",
+    description="Generates a presigned URL that allows direct upload to S3",
+    status_code=HTTP_200_OK,
+)
+def get_presigned_url(upload_id: str, key: str, part_number: int) -> dict[str, str]:
+    """
+    Generate a presigned URL for uploading a specific part:
+
+    - Creates a temporary URL valid for 1 hour
+    - Client can use this URL to upload the part directly to S3
+    - Part number must be between 1 and 10,000
+
+    The client should request a new URL for each part they need to upload.
+    """
+    # TODO: needs to be async
+    presigned_url = s3_client.generate_presigned_url(
+        "upload_part",
+        Params={
+            "Bucket": S3_BUCKET_NAME,
+            "Key": key,
+            "PartNumber": part_number,
+            "UploadId": upload_id,
+        },
+        ExpiresIn=3600,
+    )
+
+    return {"presigned_url": presigned_url}

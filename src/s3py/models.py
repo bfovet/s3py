@@ -17,6 +17,14 @@ class StartUploadRequest(BaseModel):
     user_id: str
 
 
+class UploadPartRequest(BaseModel):
+    upload_id: str
+    key: str
+    part_number: int
+    etag: str
+    user_id: str
+
+
 class Upload(Base):
     __tablename__ = "upload"
 

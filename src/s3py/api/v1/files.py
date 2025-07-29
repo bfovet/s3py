@@ -121,7 +121,7 @@ async def start_upload(
         )
         db.add(upload)
         await db.commit()
-        await db.refresh(upload)
+        # await db.refresh(upload)
     except Exception as e:
         await db.rollback()
         raise e
@@ -202,11 +202,11 @@ async def upload_part(
     )
     db.add(part)
     await db.commit()
-    await db.refresh(part)
+    # await db.refresh(part)
 
     upload.status = "in-progress"
     await db.commit()
-    await db.refresh(upload)
+    # await db.refresh(upload)
 
     return {"success": True}
 
@@ -298,7 +298,7 @@ async def complete_upload(
 
         upload.status = "completed"
         await db.commit()
-        await db.refresh(upload)
+        # await db.refresh(upload)
 
         return {
             "message": "Upload completed successfully",

@@ -75,6 +75,7 @@ class CompleteUploadResponse(BaseModel):
     key: str
 
 
+# TODO: add a created_at (datetime) attribute
 class Upload(Base):
     __tablename__ = "upload"
 

@@ -119,6 +119,15 @@ async def main():
     user_id = "minio_user"
 
     async with Client(base_url="http://localhost:8000") as client:
+        # First check if there's an upload for that file that is not completed
+        # in the database. If there are multiple, use the one with the most recent
+        # created_at field and delete the others.
+        # TODO: list uploads that are either initiated or in-progress.
+        #   in-progress uploads should have parts already uploaded, if one exists,
+        #   get the number of parts registered for this upload.
+        #   Once this is done, skip `start_upload` and skip uploads of chunks
+        #   whose index < number of parts.
+
         upload = await start_upload(client)
 
         async with asyncio.TaskGroup() as tg:

@@ -1,3 +1,5 @@
+from enum import StrEnum
+
 from pydantic import BaseModel
 from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, relationship, mapped_column
@@ -9,6 +11,24 @@ class HealthCheck(BaseModel):
     """Response model to validate and return when performing a health check."""
 
     status: str = "OK"
+
+
+class UploadStatus(StrEnum):
+    INITIATED = "initiated"
+    IN_PROGRESS = "in-progress"
+    COMPLETED = "completed"
+
+
+class UploadRequest(BaseModel):
+    id: str
+    status: UploadStatus | None
+
+
+class UploadResponse(BaseModel):
+    upload_id: str
+    user_id: str
+    key: str
+    status: UploadStatus
 
 
 class StartUploadRequest(BaseModel):

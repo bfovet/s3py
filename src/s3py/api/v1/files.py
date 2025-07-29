@@ -18,10 +18,42 @@ from s3py.models import (
     PresignedUrlResponse,
     UploadPartResponse,
     CompleteUploadResponse,
+    UploadResponse,
+    UploadStatus,
 )
 from s3py.s3 import s3_client, S3_BUCKET_NAME
 
 router = APIRouter(tags=["files"])
+
+
+@router.get(
+    "/uploads",
+    summary="List all uploads",
+    description="Gets a list of uploads, optionally filtered by status",
+    status_code=HTTP_200_OK,
+    response_model=list[UploadResponse],
+)
+async def get_uploads(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    upload_id: str,
+    upload_status: UploadStatus | None = None,
+):
+    """
+    Get a list of all uploads by id.
+    """
+    stmt = (
+        select(Upload)
+        .options(selectinload(Upload.parts))
+        .where(Upload.upload_id == upload_id)
+    )
+
+    if upload_status:
+        stmt.where(Upload.status == upload_status)
+
+    result = await db.execute(stmt)
+    uploads = result.scalars().all()
+
+    return uploads
 
 
 @router.post(

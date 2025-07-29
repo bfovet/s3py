@@ -1,6 +1,7 @@
+from asyncio import Event
 from collections.abc import Callable
 from contextlib import _AsyncGeneratorContextManager, asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, TypedDict
 
 import anyio.to_thread
 from fastapi import FastAPI, APIRouter
@@ -20,18 +21,18 @@ async def set_threadpool_tokens(num_tokens: int = 100) -> None:
     limiter.total_tokens = num_tokens
 
 
+class State(TypedDict):
+    initialization_complete: Event
+
+
 def lifespan_factory(
     create_tables_on_start: bool = True,
 ) -> Callable[[FastAPI], _AsyncGeneratorContextManager[Any]]:
     """Factory to create a lifespan async context manager for a FastAPI app."""
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncGenerator:
-        from asyncio import Event
-
+    async def lifespan(_: FastAPI) -> AsyncGenerator[dict[str, Event], None]:
         initialization_complete = Event()
-        # FIXME: https://github.com/Kludex/fastapi-tips?tab=readme-ov-file#6-use-lifespan-state-instead-of-appstate
-        # app.state.initialization_complete = initialization_complete
 
         await set_threadpool_tokens()
 

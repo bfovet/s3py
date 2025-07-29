@@ -31,6 +31,11 @@ class UploadResponse(BaseModel):
     status: UploadStatus
 
 
+class DeleteUploadResponse(BaseModel):
+    message: str
+    deleted_upload: UploadResponse
+
+
 class StartUploadRequest(BaseModel):
     filename: str
     content_type: str

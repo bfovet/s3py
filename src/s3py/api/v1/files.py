@@ -5,7 +5,7 @@ from fastapi.params import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from starlette.status import HTTP_201_CREATED, HTTP_200_OK
+from starlette.status import HTTP_201_CREATED, HTTP_200_OK, HTTP_404_NOT_FOUND
 
 from s3py.database import get_db
 from s3py.models import (
@@ -20,6 +20,7 @@ from s3py.models import (
     CompleteUploadResponse,
     UploadResponse,
     UploadStatus,
+    DeleteUploadResponse,
 )
 from s3py.s3 import s3_client, S3_BUCKET_NAME
 
@@ -54,6 +55,33 @@ async def get_uploads(
     uploads = result.scalars().all()
 
     return uploads
+
+
+@router.delete(
+    "/uploads/{upload_id}",
+    summary="Delete an upload",
+    description="Deletes an upload given its id",
+    response_model=DeleteUploadResponse,
+)
+async def delete_upload(db: Annotated[AsyncSession, Depends(get_db)], upload_id: str):
+    """
+    Delete an upload.
+    """
+    result = await db.execute(select(Upload).where(Upload.upload_id == upload_id))
+    upload = result.scalars().one_or_none()
+    if not upload:
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND,
+            detail=f"Upload with id {upload_id} not found",
+        )
+
+    await db.delete(upload)
+    await db.commit()
+
+    return {
+        "message": f"Upload '{upload.upload_id}' deleted successfully",
+        "deleted_upload": upload,
+    }
 
 
 @router.post(

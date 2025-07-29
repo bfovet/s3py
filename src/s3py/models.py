@@ -17,6 +17,15 @@ class StartUploadRequest(BaseModel):
     user_id: str
 
 
+class StartUploadResponse(BaseModel):
+    upload_id: str
+    key: str
+
+
+class PresignedUrlResponse(BaseModel):
+    presigned_url: str
+
+
 class UploadPartRequest(BaseModel):
     upload_id: str
     key: str
@@ -25,10 +34,20 @@ class UploadPartRequest(BaseModel):
     user_id: str
 
 
+class UploadPartResponse(BaseModel):
+    success: bool
+
+
 class CompleteUploadRequest(BaseModel):
     upload_id: str
     key: str
     user_id: str
+
+
+class CompleteUploadResponse(BaseModel):
+    message: str
+    location: str
+    key: str
 
 
 class Upload(Base):

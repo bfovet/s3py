@@ -6,10 +6,8 @@ import httpx
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.http_validation_error import HTTPValidationError
-from ...models.upload_part_api_v1_upload_part_post_response_upload_part_api_v1_upload_part_post import (
-    UploadPartApiV1UploadPartPostResponseUploadPartApiV1UploadPartPost,
-)
 from ...models.upload_part_request import UploadPartRequest
+from ...models.upload_part_response import UploadPartResponse
 from ...types import Response
 
 
@@ -34,16 +32,9 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Optional[
-    Union[
-        HTTPValidationError,
-        UploadPartApiV1UploadPartPostResponseUploadPartApiV1UploadPartPost,
-    ]
-]:
+) -> Optional[Union[HTTPValidationError, UploadPartResponse]]:
     if response.status_code == 201:
-        response_201 = UploadPartApiV1UploadPartPostResponseUploadPartApiV1UploadPartPost.from_dict(
-            response.json()
-        )
+        response_201 = UploadPartResponse.from_dict(response.json())
 
         return response_201
     if response.status_code == 422:
@@ -58,12 +49,7 @@ def _parse_response(
 
 def _build_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Response[
-    Union[
-        HTTPValidationError,
-        UploadPartApiV1UploadPartPostResponseUploadPartApiV1UploadPartPost,
-    ]
-]:
+) -> Response[Union[HTTPValidationError, UploadPartResponse]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -76,12 +62,7 @@ def sync_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
     body: UploadPartRequest,
-) -> Response[
-    Union[
-        HTTPValidationError,
-        UploadPartApiV1UploadPartPostResponseUploadPartApiV1UploadPartPost,
-    ]
-]:
+) -> Response[Union[HTTPValidationError, UploadPartResponse]]:
     """Record a successfully uploaded part
 
      Updates the database with information about an uploaded part
@@ -94,7 +75,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, UploadPartApiV1UploadPartPostResponseUploadPartApiV1UploadPartPost]]
+        Response[Union[HTTPValidationError, UploadPartResponse]]
     """
 
     kwargs = _get_kwargs(
@@ -112,12 +93,7 @@ def sync(
     *,
     client: Union[AuthenticatedClient, Client],
     body: UploadPartRequest,
-) -> Optional[
-    Union[
-        HTTPValidationError,
-        UploadPartApiV1UploadPartPostResponseUploadPartApiV1UploadPartPost,
-    ]
-]:
+) -> Optional[Union[HTTPValidationError, UploadPartResponse]]:
     """Record a successfully uploaded part
 
      Updates the database with information about an uploaded part
@@ -130,7 +106,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, UploadPartApiV1UploadPartPostResponseUploadPartApiV1UploadPartPost]
+        Union[HTTPValidationError, UploadPartResponse]
     """
 
     return sync_detailed(
@@ -143,12 +119,7 @@ async def asyncio_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
     body: UploadPartRequest,
-) -> Response[
-    Union[
-        HTTPValidationError,
-        UploadPartApiV1UploadPartPostResponseUploadPartApiV1UploadPartPost,
-    ]
-]:
+) -> Response[Union[HTTPValidationError, UploadPartResponse]]:
     """Record a successfully uploaded part
 
      Updates the database with information about an uploaded part
@@ -161,7 +132,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, UploadPartApiV1UploadPartPostResponseUploadPartApiV1UploadPartPost]]
+        Response[Union[HTTPValidationError, UploadPartResponse]]
     """
 
     kwargs = _get_kwargs(
@@ -177,12 +148,7 @@ async def asyncio(
     *,
     client: Union[AuthenticatedClient, Client],
     body: UploadPartRequest,
-) -> Optional[
-    Union[
-        HTTPValidationError,
-        UploadPartApiV1UploadPartPostResponseUploadPartApiV1UploadPartPost,
-    ]
-]:
+) -> Optional[Union[HTTPValidationError, UploadPartResponse]]:
     """Record a successfully uploaded part
 
      Updates the database with information about an uploaded part
@@ -195,7 +161,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, UploadPartApiV1UploadPartPostResponseUploadPartApiV1UploadPartPost]
+        Union[HTTPValidationError, UploadPartResponse]
     """
 
     return (

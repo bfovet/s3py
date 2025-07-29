@@ -1,33 +1,25 @@
 """Contains all the data models used in inputs/outputs"""
 
-from .complete_upload_api_v1_complete_upload_post_response_complete_upload_api_v1_complete_upload_post import (
-    CompleteUploadApiV1CompleteUploadPostResponseCompleteUploadApiV1CompleteUploadPost,
-)
 from .complete_upload_request import CompleteUploadRequest
-from .get_presigned_url_api_v1_presigned_url_get_response_get_presigned_url_api_v1_presigned_url_get import (
-    GetPresignedUrlApiV1PresignedUrlGetResponseGetPresignedUrlApiV1PresignedUrlGet,
-)
+from .complete_upload_response import CompleteUploadResponse
 from .health_check import HealthCheck
 from .http_validation_error import HTTPValidationError
-from .start_upload_api_v1_start_upload_post_response_start_upload_api_v1_start_upload_post import (
-    StartUploadApiV1StartUploadPostResponseStartUploadApiV1StartUploadPost,
-)
+from .presigned_url_response import PresignedUrlResponse
 from .start_upload_request import StartUploadRequest
-from .upload_part_api_v1_upload_part_post_response_upload_part_api_v1_upload_part_post import (
-    UploadPartApiV1UploadPartPostResponseUploadPartApiV1UploadPartPost,
-)
+from .start_upload_response import StartUploadResponse
 from .upload_part_request import UploadPartRequest
+from .upload_part_response import UploadPartResponse
 from .validation_error import ValidationError
 
 __all__ = (
-    "CompleteUploadApiV1CompleteUploadPostResponseCompleteUploadApiV1CompleteUploadPost",
     "CompleteUploadRequest",
-    "GetPresignedUrlApiV1PresignedUrlGetResponseGetPresignedUrlApiV1PresignedUrlGet",
+    "CompleteUploadResponse",
     "HealthCheck",
     "HTTPValidationError",
-    "StartUploadApiV1StartUploadPostResponseStartUploadApiV1StartUploadPost",
+    "PresignedUrlResponse",
     "StartUploadRequest",
-    "UploadPartApiV1UploadPartPostResponseUploadPartApiV1UploadPartPost",
+    "StartUploadResponse",
     "UploadPartRequest",
+    "UploadPartResponse",
     "ValidationError",
 )

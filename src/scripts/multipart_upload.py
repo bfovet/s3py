@@ -8,6 +8,10 @@ from client.s3py_client.models import (
     StartUploadRequest,
     UploadPartRequest,
     CompleteUploadRequest,
+    StartUploadResponse,
+    PresignedUrlResponse,
+    UploadPartResponse,
+    CompleteUploadResponse,
 )
 from client.s3py_client.api.files import (
     start_upload_api_v1_start_upload_post,
@@ -55,26 +59,28 @@ class ChunkedBinaryReader:
             yield chunk
 
 
-async def start_upload(client: Client):
-    request = StartUploadRequest(
-        filename="file.bin",
-        content_type="application/octet-stream",
-        user_id="minio_user",
-    )
+async def start_upload(client: Client) -> StartUploadResponse:
     response = await start_upload_api_v1_start_upload_post.asyncio(
-        client=client, body=request
+        client=client,
+        body=StartUploadRequest(
+            filename="file.bin",
+            content_type="application/octet-stream",
+            user_id="minio_user",
+        ),
     )
-    return response.additional_properties
+    return response
 
 
-async def get_presigned_url(client: Client, upload_id: str, key: str, part_number: int):
+async def get_presigned_url(
+    client: Client, upload_id: str, key: str, part_number: int
+) -> PresignedUrlResponse:
     response = await get_presigned_url_api_v1_presigned_url_get.asyncio(
         client=client, upload_id=upload_id, key=key, part_number=part_number
     )
-    return response.additional_properties
+    return response
 
 
-async def upload_to_presigned_url(presigned_url: str, chunk: bytes):
+async def upload_to_presigned_url(presigned_url: str, chunk: bytes) -> httpx.Response:
     async with httpx.AsyncClient() as client:
         response = await client.put(url=presigned_url, content=chunk, timeout=None)
 
@@ -83,7 +89,7 @@ async def upload_to_presigned_url(presigned_url: str, chunk: bytes):
 
 async def upload_part(
     client: Client, upload_id: str, key: str, part_number: int, etag: str, user_id: str
-):
+) -> UploadPartResponse:
     request = UploadPartRequest(
         upload_id=upload_id,
         key=key,
@@ -94,17 +100,17 @@ async def upload_part(
     response = await upload_part_api_v1_upload_part_post.asyncio(
         client=client, body=request
     )
-    print(response)
-
-    return response.additional_properties
+    return response
 
 
-async def complete_upload(client: Client, upload_id: str, key: str, user_id: str):
+async def complete_upload(
+    client: Client, upload_id: str, key: str, user_id: str
+) -> CompleteUploadResponse:
     request = CompleteUploadRequest(upload_id=upload_id, key=key, user_id=user_id)
     response = await complete_upload_api_v1_complete_upload_post.asyncio(
         client=client, body=request
     )
-    return response.additional_properties
+    return response
 
 
 async def main():
@@ -114,19 +120,22 @@ async def main():
 
     async with Client(base_url="http://localhost:8000") as client:
         upload = await start_upload(client)
-        upload_id = upload["upload_id"]
-        key = upload["key"]
 
         async with asyncio.TaskGroup() as tg:
             tasks = []
 
             with ChunkedBinaryReader(file_to_upload, CHUNK_SIZE) as reader:
                 for index, chunk in enumerate(reader.read_chunks(), start=1):
-                    response = await get_presigned_url(client, upload_id, key, index)
-                    presigned_url = response["presigned_url"]
-                    print(f"Chunk {index} presigned URL generated: {presigned_url}")
+                    response = await get_presigned_url(
+                        client, upload.upload_id, upload.key, index
+                    )
+                    print(
+                        f"Chunk {index} presigned URL generated: {response.presigned_url}"
+                    )
 
-                    task = tg.create_task(upload_to_presigned_url(presigned_url, chunk))
+                    task = tg.create_task(
+                        upload_to_presigned_url(response.presigned_url, chunk)
+                    )
                     tasks.append(task)
 
             upload_results = [await task for task in tasks]
@@ -136,19 +145,19 @@ async def main():
             print(f"Chunk {index} ETag: {tag_from_header}")
             result = await upload_part(
                 client=client,
-                upload_id=upload_id,
-                key=key,
+                upload_id=upload.upload_id,
+                key=upload.key,
                 part_number=index,
                 etag=tag_from_header,
                 user_id=user_id,
             )
 
             # TODO: check result
-            if not result["success"]:
+            if not result.success:
                 pass
 
-        response = await complete_upload(client, upload_id, key, user_id)
-        print(response)
+        response = await complete_upload(client, upload.upload_id, upload.key, user_id)
+        print(f"{response.message} : {response.location}")
 
 
 if __name__ == "__main__":

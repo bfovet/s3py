@@ -14,6 +14,10 @@ from s3py.models import (
     Upload,
     Part,
     CompleteUploadRequest,
+    StartUploadResponse,
+    PresignedUrlResponse,
+    UploadPartResponse,
+    CompleteUploadResponse,
 )
 from s3py.s3 import s3_client, S3_BUCKET_NAME
 
@@ -25,6 +29,7 @@ router = APIRouter(tags=["files"])
     summary="Initialize a multipart file upload",
     description="Creates a new multipart upload session in S3 and records it in the database",
     status_code=HTTP_201_CREATED,
+    response_model=StartUploadResponse,
 )
 async def start_upload(
     request: StartUploadRequest, db: Annotated[AsyncSession, Depends(get_db)]
@@ -43,11 +48,14 @@ async def start_upload(
         Bucket=S3_BUCKET_NAME, Key=request.filename, ContentType=request.content_type
     )
 
+    upload_id = response["UploadId"]
+    key = response["Key"]
+
     try:
         upload = Upload(
             user_id=request.user_id,
-            key=response["Key"],
-            upload_id=response["UploadId"],
+            key=key,
+            upload_id=upload_id,
             parts=[],
             status="initiated",
         )
@@ -58,7 +66,7 @@ async def start_upload(
         await db.rollback()
         raise e
 
-    return {"upload_id": response["UploadId"], "key": response["Key"]}
+    return {"upload_id": upload_id, "key": key}
 
 
 @router.get(
@@ -66,6 +74,7 @@ async def start_upload(
     summary="Get a presigned URL for part upload",
     description="Generates a presigned URL that allows direct upload to S3",
     status_code=HTTP_200_OK,
+    response_model=PresignedUrlResponse,
 )
 def get_presigned_url(upload_id: str, key: str, part_number: int) -> dict[str, str]:
     """
@@ -97,6 +106,7 @@ def get_presigned_url(upload_id: str, key: str, part_number: int) -> dict[str, s
     summary="Record a successfully uploaded part",
     description="Updates the database with information about an uploaded part",
     status_code=HTTP_201_CREATED,
+    response_model=UploadPartResponse,
 )
 async def upload_part(
     request: UploadPartRequest, db: Annotated[AsyncSession, Depends(get_db)]
@@ -146,6 +156,7 @@ async def upload_part(
     summary="Complete the multipart upload",
     description="Finalizes the multipart upload by combining all parts in S3",
     status_code=HTTP_201_CREATED,
+    response_model=CompleteUploadResponse,
 )
 async def complete_upload(
     request: CompleteUploadRequest, db: Annotated[AsyncSession, Depends(get_db)]

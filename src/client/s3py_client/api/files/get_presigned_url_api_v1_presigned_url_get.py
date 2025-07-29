@@ -5,10 +5,8 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
-from ...models.get_presigned_url_api_v1_presigned_url_get_response_get_presigned_url_api_v1_presigned_url_get import (
-    GetPresignedUrlApiV1PresignedUrlGetResponseGetPresignedUrlApiV1PresignedUrlGet,
-)
 from ...models.http_validation_error import HTTPValidationError
+from ...models.presigned_url_response import PresignedUrlResponse
 from ...types import UNSET, Response
 
 
@@ -39,16 +37,9 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Optional[
-    Union[
-        GetPresignedUrlApiV1PresignedUrlGetResponseGetPresignedUrlApiV1PresignedUrlGet,
-        HTTPValidationError,
-    ]
-]:
+) -> Optional[Union[HTTPValidationError, PresignedUrlResponse]]:
     if response.status_code == 200:
-        response_200 = GetPresignedUrlApiV1PresignedUrlGetResponseGetPresignedUrlApiV1PresignedUrlGet.from_dict(
-            response.json()
-        )
+        response_200 = PresignedUrlResponse.from_dict(response.json())
 
         return response_200
     if response.status_code == 422:
@@ -63,12 +54,7 @@ def _parse_response(
 
 def _build_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Response[
-    Union[
-        GetPresignedUrlApiV1PresignedUrlGetResponseGetPresignedUrlApiV1PresignedUrlGet,
-        HTTPValidationError,
-    ]
-]:
+) -> Response[Union[HTTPValidationError, PresignedUrlResponse]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -83,12 +69,7 @@ def sync_detailed(
     upload_id: str,
     key: str,
     part_number: int,
-) -> Response[
-    Union[
-        GetPresignedUrlApiV1PresignedUrlGetResponseGetPresignedUrlApiV1PresignedUrlGet,
-        HTTPValidationError,
-    ]
-]:
+) -> Response[Union[HTTPValidationError, PresignedUrlResponse]]:
     """Get a presigned URL for part upload
 
      Generates a presigned URL that allows direct upload to S3
@@ -103,7 +84,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[GetPresignedUrlApiV1PresignedUrlGetResponseGetPresignedUrlApiV1PresignedUrlGet, HTTPValidationError]]
+        Response[Union[HTTPValidationError, PresignedUrlResponse]]
     """
 
     kwargs = _get_kwargs(
@@ -125,12 +106,7 @@ def sync(
     upload_id: str,
     key: str,
     part_number: int,
-) -> Optional[
-    Union[
-        GetPresignedUrlApiV1PresignedUrlGetResponseGetPresignedUrlApiV1PresignedUrlGet,
-        HTTPValidationError,
-    ]
-]:
+) -> Optional[Union[HTTPValidationError, PresignedUrlResponse]]:
     """Get a presigned URL for part upload
 
      Generates a presigned URL that allows direct upload to S3
@@ -145,7 +121,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[GetPresignedUrlApiV1PresignedUrlGetResponseGetPresignedUrlApiV1PresignedUrlGet, HTTPValidationError]
+        Union[HTTPValidationError, PresignedUrlResponse]
     """
 
     return sync_detailed(
@@ -162,12 +138,7 @@ async def asyncio_detailed(
     upload_id: str,
     key: str,
     part_number: int,
-) -> Response[
-    Union[
-        GetPresignedUrlApiV1PresignedUrlGetResponseGetPresignedUrlApiV1PresignedUrlGet,
-        HTTPValidationError,
-    ]
-]:
+) -> Response[Union[HTTPValidationError, PresignedUrlResponse]]:
     """Get a presigned URL for part upload
 
      Generates a presigned URL that allows direct upload to S3
@@ -182,7 +153,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[GetPresignedUrlApiV1PresignedUrlGetResponseGetPresignedUrlApiV1PresignedUrlGet, HTTPValidationError]]
+        Response[Union[HTTPValidationError, PresignedUrlResponse]]
     """
 
     kwargs = _get_kwargs(
@@ -202,12 +173,7 @@ async def asyncio(
     upload_id: str,
     key: str,
     part_number: int,
-) -> Optional[
-    Union[
-        GetPresignedUrlApiV1PresignedUrlGetResponseGetPresignedUrlApiV1PresignedUrlGet,
-        HTTPValidationError,
-    ]
-]:
+) -> Optional[Union[HTTPValidationError, PresignedUrlResponse]]:
     """Get a presigned URL for part upload
 
      Generates a presigned URL that allows direct upload to S3
@@ -222,7 +188,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[GetPresignedUrlApiV1PresignedUrlGetResponseGetPresignedUrlApiV1PresignedUrlGet, HTTPValidationError]
+        Union[HTTPValidationError, PresignedUrlResponse]
     """
 
     return (

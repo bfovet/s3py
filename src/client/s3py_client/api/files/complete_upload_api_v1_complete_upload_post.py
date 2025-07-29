@@ -5,10 +5,8 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
-from ...models.complete_upload_api_v1_complete_upload_post_response_complete_upload_api_v1_complete_upload_post import (
-    CompleteUploadApiV1CompleteUploadPostResponseCompleteUploadApiV1CompleteUploadPost,
-)
 from ...models.complete_upload_request import CompleteUploadRequest
+from ...models.complete_upload_response import CompleteUploadResponse
 from ...models.http_validation_error import HTTPValidationError
 from ...types import Response
 
@@ -34,16 +32,9 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Optional[
-    Union[
-        CompleteUploadApiV1CompleteUploadPostResponseCompleteUploadApiV1CompleteUploadPost,
-        HTTPValidationError,
-    ]
-]:
+) -> Optional[Union[CompleteUploadResponse, HTTPValidationError]]:
     if response.status_code == 201:
-        response_201 = CompleteUploadApiV1CompleteUploadPostResponseCompleteUploadApiV1CompleteUploadPost.from_dict(
-            response.json()
-        )
+        response_201 = CompleteUploadResponse.from_dict(response.json())
 
         return response_201
     if response.status_code == 422:
@@ -58,12 +49,7 @@ def _parse_response(
 
 def _build_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Response[
-    Union[
-        CompleteUploadApiV1CompleteUploadPostResponseCompleteUploadApiV1CompleteUploadPost,
-        HTTPValidationError,
-    ]
-]:
+) -> Response[Union[CompleteUploadResponse, HTTPValidationError]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -76,12 +62,7 @@ def sync_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
     body: CompleteUploadRequest,
-) -> Response[
-    Union[
-        CompleteUploadApiV1CompleteUploadPostResponseCompleteUploadApiV1CompleteUploadPost,
-        HTTPValidationError,
-    ]
-]:
+) -> Response[Union[CompleteUploadResponse, HTTPValidationError]]:
     """Complete the multipart upload
 
      Finalizes the multipart upload by combining all parts in S3
@@ -94,7 +75,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[CompleteUploadApiV1CompleteUploadPostResponseCompleteUploadApiV1CompleteUploadPost, HTTPValidationError]]
+        Response[Union[CompleteUploadResponse, HTTPValidationError]]
     """
 
     kwargs = _get_kwargs(
@@ -112,12 +93,7 @@ def sync(
     *,
     client: Union[AuthenticatedClient, Client],
     body: CompleteUploadRequest,
-) -> Optional[
-    Union[
-        CompleteUploadApiV1CompleteUploadPostResponseCompleteUploadApiV1CompleteUploadPost,
-        HTTPValidationError,
-    ]
-]:
+) -> Optional[Union[CompleteUploadResponse, HTTPValidationError]]:
     """Complete the multipart upload
 
      Finalizes the multipart upload by combining all parts in S3
@@ -130,7 +106,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[CompleteUploadApiV1CompleteUploadPostResponseCompleteUploadApiV1CompleteUploadPost, HTTPValidationError]
+        Union[CompleteUploadResponse, HTTPValidationError]
     """
 
     return sync_detailed(
@@ -143,12 +119,7 @@ async def asyncio_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
     body: CompleteUploadRequest,
-) -> Response[
-    Union[
-        CompleteUploadApiV1CompleteUploadPostResponseCompleteUploadApiV1CompleteUploadPost,
-        HTTPValidationError,
-    ]
-]:
+) -> Response[Union[CompleteUploadResponse, HTTPValidationError]]:
     """Complete the multipart upload
 
      Finalizes the multipart upload by combining all parts in S3
@@ -161,7 +132,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[CompleteUploadApiV1CompleteUploadPostResponseCompleteUploadApiV1CompleteUploadPost, HTTPValidationError]]
+        Response[Union[CompleteUploadResponse, HTTPValidationError]]
     """
 
     kwargs = _get_kwargs(
@@ -177,12 +148,7 @@ async def asyncio(
     *,
     client: Union[AuthenticatedClient, Client],
     body: CompleteUploadRequest,
-) -> Optional[
-    Union[
-        CompleteUploadApiV1CompleteUploadPostResponseCompleteUploadApiV1CompleteUploadPost,
-        HTTPValidationError,
-    ]
-]:
+) -> Optional[Union[CompleteUploadResponse, HTTPValidationError]]:
     """Complete the multipart upload
 
      Finalizes the multipart upload by combining all parts in S3
@@ -195,7 +161,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[CompleteUploadApiV1CompleteUploadPostResponseCompleteUploadApiV1CompleteUploadPost, HTTPValidationError]
+        Union[CompleteUploadResponse, HTTPValidationError]
     """
 
     return (

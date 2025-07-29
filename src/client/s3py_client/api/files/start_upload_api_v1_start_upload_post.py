@@ -6,10 +6,8 @@ import httpx
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.http_validation_error import HTTPValidationError
-from ...models.start_upload_api_v1_start_upload_post_response_start_upload_api_v1_start_upload_post import (
-    StartUploadApiV1StartUploadPostResponseStartUploadApiV1StartUploadPost,
-)
 from ...models.start_upload_request import StartUploadRequest
+from ...models.start_upload_response import StartUploadResponse
 from ...types import Response
 
 
@@ -34,16 +32,9 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Optional[
-    Union[
-        HTTPValidationError,
-        StartUploadApiV1StartUploadPostResponseStartUploadApiV1StartUploadPost,
-    ]
-]:
+) -> Optional[Union[HTTPValidationError, StartUploadResponse]]:
     if response.status_code == 201:
-        response_201 = StartUploadApiV1StartUploadPostResponseStartUploadApiV1StartUploadPost.from_dict(
-            response.json()
-        )
+        response_201 = StartUploadResponse.from_dict(response.json())
 
         return response_201
     if response.status_code == 422:
@@ -58,12 +49,7 @@ def _parse_response(
 
 def _build_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Response[
-    Union[
-        HTTPValidationError,
-        StartUploadApiV1StartUploadPostResponseStartUploadApiV1StartUploadPost,
-    ]
-]:
+) -> Response[Union[HTTPValidationError, StartUploadResponse]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -76,12 +62,7 @@ def sync_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
     body: StartUploadRequest,
-) -> Response[
-    Union[
-        HTTPValidationError,
-        StartUploadApiV1StartUploadPostResponseStartUploadApiV1StartUploadPost,
-    ]
-]:
+) -> Response[Union[HTTPValidationError, StartUploadResponse]]:
     """Initialize a multipart file upload
 
      Creates a new multipart upload session in S3 and records it in the database
@@ -94,7 +75,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, StartUploadApiV1StartUploadPostResponseStartUploadApiV1StartUploadPost]]
+        Response[Union[HTTPValidationError, StartUploadResponse]]
     """
 
     kwargs = _get_kwargs(
@@ -112,12 +93,7 @@ def sync(
     *,
     client: Union[AuthenticatedClient, Client],
     body: StartUploadRequest,
-) -> Optional[
-    Union[
-        HTTPValidationError,
-        StartUploadApiV1StartUploadPostResponseStartUploadApiV1StartUploadPost,
-    ]
-]:
+) -> Optional[Union[HTTPValidationError, StartUploadResponse]]:
     """Initialize a multipart file upload
 
      Creates a new multipart upload session in S3 and records it in the database
@@ -130,7 +106,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, StartUploadApiV1StartUploadPostResponseStartUploadApiV1StartUploadPost]
+        Union[HTTPValidationError, StartUploadResponse]
     """
 
     return sync_detailed(
@@ -143,12 +119,7 @@ async def asyncio_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
     body: StartUploadRequest,
-) -> Response[
-    Union[
-        HTTPValidationError,
-        StartUploadApiV1StartUploadPostResponseStartUploadApiV1StartUploadPost,
-    ]
-]:
+) -> Response[Union[HTTPValidationError, StartUploadResponse]]:
     """Initialize a multipart file upload
 
      Creates a new multipart upload session in S3 and records it in the database
@@ -161,7 +132,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, StartUploadApiV1StartUploadPostResponseStartUploadApiV1StartUploadPost]]
+        Response[Union[HTTPValidationError, StartUploadResponse]]
     """
 
     kwargs = _get_kwargs(
@@ -177,12 +148,7 @@ async def asyncio(
     *,
     client: Union[AuthenticatedClient, Client],
     body: StartUploadRequest,
-) -> Optional[
-    Union[
-        HTTPValidationError,
-        StartUploadApiV1StartUploadPostResponseStartUploadApiV1StartUploadPost,
-    ]
-]:
+) -> Optional[Union[HTTPValidationError, StartUploadResponse]]:
     """Initialize a multipart file upload
 
      Creates a new multipart upload session in S3 and records it in the database
@@ -195,7 +161,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, StartUploadApiV1StartUploadPostResponseStartUploadApiV1StartUploadPost]
+        Union[HTTPValidationError, StartUploadResponse]
     """
 
     return (

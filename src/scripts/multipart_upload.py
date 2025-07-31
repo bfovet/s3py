@@ -11,9 +11,11 @@ from client.s3py_client.models import (
     StartUploadResponse,
     PresignedUrlResponse,
     UploadPartResponse,
-    CompleteUploadResponse,
+    CompleteUploadResponse, UploadStatus,
 )
 from client.s3py_client.api.files import (
+    get_uploads_api_v1_uploads_get,
+    get_last_part_api_v1_uploads_upload_id_last_part_get,
     start_upload_api_v1_start_upload_post,
     get_presigned_url_api_v1_presigned_url_get,
     upload_part_api_v1_upload_part_post,
@@ -115,58 +117,103 @@ async def complete_upload(
 
 async def main():
     # TODO: setup argparse
-    file_to_upload = Path("file.bin")
+    filename_to_upload = "file.bin"
+    file_to_upload = Path(filename_to_upload)
     user_id = "minio_user"
 
     async with Client(base_url="http://localhost:8000") as client:
         # First check if there's an upload for that file that is not completed
         # in the database. If there are multiple, use the one with the most recent
         # created_at field and delete the others.
-        # TODO: list uploads that are either initiated or in-progress.
-        #   in-progress uploads should have parts already uploaded, if one exists,
-        #   get the number of parts registered for this upload.
-        #   Once this is done, skip `start_upload` and skip uploads of chunks
-        #   whose index < number of parts.
+        in_progress_uploads = await get_uploads_api_v1_uploads_get.asyncio(client=client, key=filename_to_upload, upload_status=[UploadStatus.INITIATED, UploadStatus.IN_PROGRESS])
+        print(in_progress_uploads)
+        if in_progress_uploads:
+            upload = in_progress_uploads[0]
+            last_part = await get_last_part_api_v1_uploads_upload_id_last_part_get.asyncio(client=client, upload_id=upload.upload_id)
 
-        upload = await start_upload(client)
+            async with asyncio.TaskGroup() as tg:
+                tasks = []
 
-        async with asyncio.TaskGroup() as tg:
-            tasks = []
+                with ChunkedBinaryReader(file_to_upload, CHUNK_SIZE) as reader:
+                    for index, chunk in enumerate(reader.read_chunks(), start=1):
+                        if index <= last_part.part_number:
+                            continue
 
-            with ChunkedBinaryReader(file_to_upload, CHUNK_SIZE) as reader:
-                for index, chunk in enumerate(reader.read_chunks(), start=1):
-                    response = await get_presigned_url(
-                        client, upload.upload_id, upload.key, index
-                    )
-                    print(
-                        f"Chunk {index} presigned URL generated: {response.presigned_url}"
-                    )
+                        response = await get_presigned_url(
+                            client, upload.upload_id, upload.key, index
+                        )
+                        print(
+                            f"Chunk {index} presigned URL generated: {response.presigned_url}"
+                        )
 
-                    task = tg.create_task(
-                        upload_to_presigned_url(response.presigned_url, chunk)
-                    )
-                    tasks.append(task)
+                        task = tg.create_task(
+                            upload_to_presigned_url(response.presigned_url, chunk)
+                        )
+                        tasks.append(task)
 
-            upload_results = [await task for task in tasks]
+                upload_results = [await task for task in tasks]
 
-        for index, httpx_upload_response in enumerate(upload_results, start=1):
-            tag_from_header = httpx_upload_response.headers.get("ETag")
-            print(f"Chunk {index} ETag: {tag_from_header}")
-            result = await upload_part(
-                client=client,
-                upload_id=upload.upload_id,
-                key=upload.key,
-                part_number=index,
-                etag=tag_from_header,
-                user_id=user_id,
-            )
+            for index, httpx_upload_response in enumerate(upload_results, start=last_part.part_number+1):
+                tag_from_header = httpx_upload_response.headers.get("ETag")
+                if tag_from_header is None:
+                    raise ValueError(f"ETag was not found in header, please delete upload with id '{upload.upload_id}' and restart")
+                print(f"Chunk {index} ETag: {tag_from_header}")
+                result = await upload_part(
+                    client=client,
+                    upload_id=upload.upload_id,
+                    key=upload.key,
+                    part_number=index,
+                    etag=tag_from_header,
+                    user_id=user_id,
+                )
 
-            # TODO: check result
-            if not result.success:
-                pass
+                # TODO: check result
+                if not result.success:
+                    pass
 
-        response = await complete_upload(client, upload.upload_id, upload.key, user_id)
-        print(f"{response.message} : {response.location}")
+            response = await complete_upload(client, upload.upload_id, upload.key, user_id)
+            print(f"{response.message} : {response.location}")
+
+        else:
+            upload = await start_upload(client)
+
+            async with asyncio.TaskGroup() as tg:
+                tasks = []
+
+                with ChunkedBinaryReader(file_to_upload, CHUNK_SIZE) as reader:
+                    for index, chunk in enumerate(reader.read_chunks(), start=1):
+                        response = await get_presigned_url(
+                            client, upload.upload_id, upload.key, index
+                        )
+                        print(
+                            f"Chunk {index} presigned URL generated: {response.presigned_url}"
+                        )
+
+                        task = tg.create_task(
+                            upload_to_presigned_url(response.presigned_url, chunk)
+                        )
+                        tasks.append(task)
+
+                upload_results = [await task for task in tasks]
+
+            for index, httpx_upload_response in enumerate(upload_results, start=1):
+                tag_from_header = httpx_upload_response.headers.get("ETag")
+                print(f"Chunk {index} ETag: {tag_from_header}")
+                result = await upload_part(
+                    client=client,
+                    upload_id=upload.upload_id,
+                    key=upload.key,
+                    part_number=index,
+                    etag=tag_from_header,
+                    user_id=user_id,
+                )
+
+                # TODO: check result
+                if not result.success:
+                    pass
+
+            response = await complete_upload(client, upload.upload_id, upload.key, user_id)
+            print(f"{response.message} : {response.location}")
 
 
 if __name__ == "__main__":

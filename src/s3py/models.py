@@ -36,6 +36,14 @@ class DeleteUploadResponse(BaseModel):
     deleted_upload: UploadResponse
 
 
+class UploadPartPublic(BaseModel):
+    upload_id: str
+    key: str
+    part_number: int
+    etag: str
+    user_id: str
+
+
 class StartUploadRequest(BaseModel):
     filename: str
     content_type: str

@@ -1,9 +1,11 @@
 import asyncio
+import json
 from pathlib import Path
 
 import httpx
 
 from client.s3py_client import Client
+from client.s3py_client.errors import UnexpectedStatus
 from client.s3py_client.models import (
     StartUploadRequest,
     UploadPartRequest,
@@ -11,7 +13,8 @@ from client.s3py_client.models import (
     StartUploadResponse,
     PresignedUrlResponse,
     UploadPartResponse,
-    CompleteUploadResponse, UploadStatus,
+    CompleteUploadResponse,
+    UploadStatus,
 )
 from client.s3py_client.api.files import (
     get_uploads_api_v1_uploads_get,
@@ -65,7 +68,7 @@ async def start_upload(client: Client) -> StartUploadResponse:
     response = await start_upload_api_v1_start_upload_post.asyncio(
         client=client,
         body=StartUploadRequest(
-            filename="file.bin",
+            filename="file_big.bin",
             content_type="application/octet-stream",
             user_id="minio_user",
         ),
@@ -121,99 +124,76 @@ async def main():
     file_to_upload = Path(filename_to_upload)
     user_id = "minio_user"
 
-    async with Client(base_url="http://localhost:8000") as client:
+    async with Client(
+        base_url="http://localhost:8000", raise_on_unexpected_status=True
+    ) as client:
         # First check if there's an upload for that file that is not completed
         # in the database. If there are multiple, use the one with the most recent
         # created_at field and delete the others.
-        in_progress_uploads = await get_uploads_api_v1_uploads_get.asyncio(client=client, key=filename_to_upload, upload_status=[UploadStatus.INITIATED, UploadStatus.IN_PROGRESS])
-        print(in_progress_uploads)
+        last_part_number = 0
+
+        in_progress_uploads = await get_uploads_api_v1_uploads_get.asyncio(
+            client=client,
+            key=filename_to_upload,
+            upload_status=[UploadStatus.INITIATED, UploadStatus.IN_PROGRESS],
+        )
         if in_progress_uploads:
             upload = in_progress_uploads[0]
-            last_part = await get_last_part_api_v1_uploads_upload_id_last_part_get.asyncio(client=client, upload_id=upload.upload_id)
-
-            async with asyncio.TaskGroup() as tg:
-                tasks = []
-
-                with ChunkedBinaryReader(file_to_upload, CHUNK_SIZE) as reader:
-                    for index, chunk in enumerate(reader.read_chunks(), start=1):
-                        if index <= last_part.part_number:
-                            continue
-
-                        response = await get_presigned_url(
-                            client, upload.upload_id, upload.key, index
-                        )
-                        print(
-                            f"Chunk {index} presigned URL generated: {response.presigned_url}"
-                        )
-
-                        task = tg.create_task(
-                            upload_to_presigned_url(response.presigned_url, chunk)
-                        )
-                        tasks.append(task)
-
-                upload_results = [await task for task in tasks]
-
-            for index, httpx_upload_response in enumerate(upload_results, start=last_part.part_number+1):
-                tag_from_header = httpx_upload_response.headers.get("ETag")
-                if tag_from_header is None:
-                    raise ValueError(f"ETag was not found in header, please delete upload with id '{upload.upload_id}' and restart")
-                print(f"Chunk {index} ETag: {tag_from_header}")
-                result = await upload_part(
-                    client=client,
-                    upload_id=upload.upload_id,
-                    key=upload.key,
-                    part_number=index,
-                    etag=tag_from_header,
-                    user_id=user_id,
+            try:
+                last_part = (
+                    await get_last_part_api_v1_uploads_upload_id_last_part_get.asyncio(
+                        client=client, upload_id=upload.upload_id
+                    )
                 )
-
-                # TODO: check result
-                if not result.success:
-                    pass
-
-            response = await complete_upload(client, upload.upload_id, upload.key, user_id)
-            print(f"{response.message} : {response.location}")
-
+                last_part_number = last_part.part_number
+            except UnexpectedStatus as e:
+                msg = json.loads(e.content.decode())["detail"]
+                print(f"Error {e.status_code} : {msg}")
         else:
             upload = await start_upload(client)
 
-            async with asyncio.TaskGroup() as tg:
-                tasks = []
+        async with asyncio.TaskGroup() as tg:
+            tasks = []
 
-                with ChunkedBinaryReader(file_to_upload, CHUNK_SIZE) as reader:
-                    for index, chunk in enumerate(reader.read_chunks(), start=1):
-                        response = await get_presigned_url(
-                            client, upload.upload_id, upload.key, index
-                        )
-                        print(
-                            f"Chunk {index} presigned URL generated: {response.presigned_url}"
-                        )
+            with ChunkedBinaryReader(file_to_upload, CHUNK_SIZE) as reader:
+                for index, chunk in enumerate(reader.read_chunks(), start=1):
+                    response = await get_presigned_url(
+                        client, upload.upload_id, upload.key, index
+                    )
+                    print(
+                        f"Chunk {index} presigned URL generated: {response.presigned_url}"
+                    )
 
-                        task = tg.create_task(
-                            upload_to_presigned_url(response.presigned_url, chunk)
-                        )
-                        tasks.append(task)
+                    task = tg.create_task(
+                        upload_to_presigned_url(response.presigned_url, chunk)
+                    )
+                    tasks.append(task)
 
-                upload_results = [await task for task in tasks]
+            upload_responses = [await task for task in tasks]
 
-            for index, httpx_upload_response in enumerate(upload_results, start=1):
-                tag_from_header = httpx_upload_response.headers.get("ETag")
-                print(f"Chunk {index} ETag: {tag_from_header}")
-                result = await upload_part(
-                    client=client,
-                    upload_id=upload.upload_id,
-                    key=upload.key,
-                    part_number=index,
-                    etag=tag_from_header,
-                    user_id=user_id,
+        for index, upload_response in enumerate(
+            upload_responses, start=last_part_number + 1
+        ):
+            tag_from_header = upload_response.headers.get("ETag")
+            if tag_from_header is None:
+                raise ValueError(
+                    f"ETag was not found in header, please delete upload with id '{upload.upload_id}' and restart"
                 )
+            print(f"Chunk {index} ETag: {tag_from_header}")
+            result = await upload_part(
+                client=client,
+                upload_id=upload.upload_id,
+                key=upload.key,
+                part_number=index,
+                etag=tag_from_header,
+                user_id=user_id,
+            )
 
-                # TODO: check result
-                if not result.success:
-                    pass
+            if not result.success:
+                raise ValueError(f"Error registering uploaded part {index}")
 
-            response = await complete_upload(client, upload.upload_id, upload.key, user_id)
-            print(f"{response.message} : {response.location}")
+        response = await complete_upload(client, upload.upload_id, upload.key, user_id)
+        print(f"{response.message} : {response.location}")
 
 
 if __name__ == "__main__":

@@ -5,7 +5,11 @@ from fastapi.params import Depends
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from starlette.status import HTTP_201_CREATED, HTTP_200_OK, HTTP_404_NOT_FOUND, HTTP_204_NO_CONTENT
+from starlette.status import (
+    HTTP_201_CREATED,
+    HTTP_200_OK,
+    HTTP_404_NOT_FOUND,
+)
 
 from s3py.database import get_db
 from s3py.models import (
@@ -20,7 +24,8 @@ from s3py.models import (
     CompleteUploadResponse,
     UploadResponse,
     UploadStatus,
-    DeleteUploadResponse, UploadPartPublic,
+    DeleteUploadResponse,
+    UploadPartPublic,
 )
 from s3py.s3 import s3_client, S3_BUCKET_NAME
 
@@ -42,14 +47,10 @@ async def get_uploads(
     """
     Get a list of all uploads for a file.
     """
-    stmt = (
-        select(Upload)
-        .options(selectinload(Upload.parts))
-        .where(Upload.key == key)
-    )
+    stmt = select(Upload).options(selectinload(Upload.parts)).where(Upload.key == key)
 
     if upload_status:
-        stmt.where(or_(Upload.status == status for status in upload_status))
+        stmt = stmt.where(or_(Upload.status == status for status in upload_status))
 
     result = await db.execute(stmt)
     uploads = result.scalars().all()
@@ -65,8 +66,7 @@ async def get_uploads(
     response_model=list[UploadResponse],
 )
 async def get_upload(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    upload_id: str
+    db: Annotated[AsyncSession, Depends(get_db)], upload_id: str
 ) -> Upload:
     """
     Get an upload by id.
@@ -80,17 +80,23 @@ async def get_upload(
     result = await db.execute(stmt)
     upload = result.scalar_one_or_none()
     if upload is None:
-        raise HTTPException(status_code=404, detail=f"No such upload with id '{upload_id}'")
+        raise HTTPException(
+            status_code=404, detail=f"No such upload with id '{upload_id}'"
+        )
 
     return upload
 
 
-@router.get("/uploads/{upload_id}/parts",
-            summary="Get upload parts",
-            description="Get a list of parts of an upload given its id",
-            status_code=HTTP_200_OK,
-            response_model=list[UploadPartPublic])
-async def get_parts(db: Annotated[AsyncSession, Depends(get_db)], upload_id: str) -> Sequence[Part]:
+@router.get(
+    "/uploads/{upload_id}/parts",
+    summary="Get upload parts",
+    description="Get a list of parts of an upload given its id",
+    status_code=HTTP_200_OK,
+    response_model=list[UploadPartPublic],
+)
+async def get_parts(
+    db: Annotated[AsyncSession, Depends(get_db)], upload_id: str
+) -> Sequence[Part]:
     """
     Get upload parts given an upload id.
     """
@@ -108,24 +114,28 @@ async def get_parts(db: Annotated[AsyncSession, Depends(get_db)], upload_id: str
     result = await db.execute(stmt)
     upload = result.scalar_one_or_none()
     if upload is None:
-        raise HTTPException(status_code=404, detail=f"No such upload with id '{upload_id}'")
+        raise HTTPException(
+            status_code=404, detail=f"No such upload with id '{upload_id}'"
+        )
 
     return upload.parts
 
 
-
-@router.get("/uploads/{upload_id}/last-part",
-            summary="Get upload parts",
-            description="Get a list of parts of an upload given its id",
-            status_code=HTTP_200_OK,
-            response_model=UploadPartPublic)
-async def get_last_part(db: Annotated[AsyncSession, Depends(get_db)], upload_id: str) -> Part:
+@router.get(
+    "/uploads/{upload_id}/last-part",
+    summary="Get upload parts",
+    description="Get a list of parts of an upload given its id",
+    status_code=HTTP_200_OK,
+    response_model=UploadPartPublic,
+)
+async def get_last_part(
+    db: Annotated[AsyncSession, Depends(get_db)], upload_id: str
+) -> Part:
     """
     Get upload parts given an upload id.
     """
     stmt = (
         select(Part)
-        # .options(selectinload(Part.upload))
         .where(Part.upload_id == upload_id)
         .order_by(Part.part_number.desc())
         .limit(1)
@@ -134,8 +144,10 @@ async def get_last_part(db: Annotated[AsyncSession, Depends(get_db)], upload_id:
     result = await db.execute(stmt)
     part = result.scalars().first()
 
-    # if part is None:
-    #     raise HTTPException(status_code=404, detail=f"No such part for upload with id '{upload_id}'")
+    if part is None:
+        raise HTTPException(
+            status_code=404, detail=f"No such part for upload with id '{upload_id}'"
+        )
 
     return part
 

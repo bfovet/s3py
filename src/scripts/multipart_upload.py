@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 from pathlib import Path
 
 import httpx
@@ -25,7 +26,8 @@ from client.s3py_client.api.files import (
     complete_upload_api_v1_complete_upload_post,
 )
 
-CHUNK_SIZE = 5 * 1024 * 1024  # 5MB
+CHUNK_SIZE = 50 * 1024 * 1024  # 5MB
+MAX_CONCURRENT_UPLOADS = 5  # Limit concurrent uploads
 
 
 class ChunkedBinaryReader:
@@ -62,6 +64,25 @@ class ChunkedBinaryReader:
             if not chunk:
                 break
             yield chunk
+
+    def read_chunks_batch(self, offset: int = 0, batch_size: int = 1) -> list[bytes]:
+        if self.file is None:
+            raise RuntimeError(
+                "File not opened. Use this class with a 'with' statement."
+            )
+
+        # Calculate byte offset and seek to position
+        byte_offset = offset * self.chunk_size
+        self.file.seek(byte_offset)
+
+        chunks = []
+        for _ in range(batch_size):
+            chunk = self.file.read(self.chunk_size)
+            if not chunk:
+                break
+            chunks.append(chunk)
+
+        return chunks
 
 
 async def start_upload(client: Client) -> StartUploadResponse:
@@ -122,7 +143,13 @@ async def main():
     # TODO: setup argparse
     filename_to_upload = "file.bin"
     file_to_upload = Path(filename_to_upload)
+    file_size = file_to_upload.stat().st_size
     user_id = "minio_user"
+
+    num_chunks_estimated = math.ceil(file_size / CHUNK_SIZE)
+    print(
+        f"file_size: {file_size >> 20} MB num_chunks (estimated): {num_chunks_estimated} chunk_size = {CHUNK_SIZE >> 20} MB"
+    )
 
     async with Client(
         base_url="http://localhost:8000", raise_on_unexpected_status=True
@@ -152,16 +179,25 @@ async def main():
         else:
             upload = await start_upload(client)
 
-        async with asyncio.TaskGroup() as tg:
-            tasks = []
-
+        for batch_idx in range(0, num_chunks_estimated, MAX_CONCURRENT_UPLOADS):
+            print(f"Processing batch {batch_idx // MAX_CONCURRENT_UPLOADS + 1}")
             with ChunkedBinaryReader(file_to_upload, CHUNK_SIZE) as reader:
-                for index, chunk in enumerate(reader.read_chunks(), start=1):
+                print("Reading file...")
+                batch = reader.read_chunks_batch(batch_idx, MAX_CONCURRENT_UPLOADS)
+                print(f"Read batch with size ({len(batch)} MB)")
+
+            async with asyncio.TaskGroup() as tg:
+                tasks = []
+                for part_idx, chunk in enumerate(batch, start=batch_idx + 1):
+                    if part_idx <= last_part_number:
+                        print(f"Skipping already uploaded chunk {part_idx}")
+                        continue
+
                     response = await get_presigned_url(
-                        client, upload.upload_id, upload.key, index
+                        client, upload.upload_id, upload.key, part_idx
                     )
                     print(
-                        f"Chunk {index} presigned URL generated: {response.presigned_url}"
+                        f"Chunk {part_idx} presigned URL generated: {response.presigned_url}"
                     )
 
                     task = tg.create_task(
@@ -169,28 +205,28 @@ async def main():
                     )
                     tasks.append(task)
 
-            upload_responses = [await task for task in tasks]
+                upload_responses = [await task for task in tasks]
 
-        for index, upload_response in enumerate(
-            upload_responses, start=last_part_number + 1
-        ):
-            tag_from_header = upload_response.headers.get("ETag")
-            if tag_from_header is None:
-                raise ValueError(
-                    f"ETag was not found in header, please delete upload with id '{upload.upload_id}' and restart"
+            for index, upload_response in enumerate(
+                upload_responses, start=batch_idx + last_part_number + 1
+            ):
+                tag_from_header = upload_response.headers.get("ETag")
+                if tag_from_header is None:
+                    raise ValueError(
+                        f"ETag was not found in header, please delete upload with id '{upload.upload_id}' and restart"
+                    )
+                print(f"Chunk {index} ETag: {tag_from_header}")
+                result = await upload_part(
+                    client=client,
+                    upload_id=upload.upload_id,
+                    key=upload.key,
+                    part_number=index,
+                    etag=tag_from_header,
+                    user_id=user_id,
                 )
-            print(f"Chunk {index} ETag: {tag_from_header}")
-            result = await upload_part(
-                client=client,
-                upload_id=upload.upload_id,
-                key=upload.key,
-                part_number=index,
-                etag=tag_from_header,
-                user_id=user_id,
-            )
 
-            if not result.success:
-                raise ValueError(f"Error registering uploaded part {index}")
+                if not result.success:
+                    raise ValueError(f"Error registering uploaded part {index}")
 
         response = await complete_upload(client, upload.upload_id, upload.key, user_id)
         print(f"{response.message} : {response.location}")

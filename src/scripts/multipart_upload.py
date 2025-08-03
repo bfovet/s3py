@@ -432,7 +432,7 @@ Examples:
         "--chunk-size",
         type=int,
         default=CHUNK_SIZE,
-        help=f"Size of each chunk in bytes (default: {CHUNK_SIZE} = 50MB)",
+        help=f"Size of each chunk in MB (default: {CHUNK_SIZE})",
     )
 
     parser.add_argument(

@@ -30,8 +30,11 @@ from client.s3py_client.api.files import (
     complete_upload_api_v1_complete_upload_post,
 )
 
-CHUNK_SIZE = 50 * 1024 * 1024  # 5MB
-MAX_CONCURRENT_UPLOADS = 10  # Limit concurrent uploads
+CHUNK_SIZE_MB = 5
+CHUNK_SIZE = CHUNK_SIZE_MB * 1024 * 1024
+MAX_CONCURRENT_UPLOADS = 10
+DEFAULT_BASE_URL = "http://localhost:8000"
+DEFAULT_USER_ID = "minio_user"
 
 
 logger = logging.getLogger(__name__)
@@ -83,14 +86,14 @@ class ChunkedBinaryReader:
             chunks_read += 1
 
 
-async def start_upload(client: Client, filename: str) -> StartUploadResponse:
+async def start_upload(args, client: Client, filename: str) -> StartUploadResponse:
     logger.debug(f"Starting upload for file: XXX, user_id: XXX, content_type: XXX")
     response = await start_upload_api_v1_start_upload_post.asyncio(
         client=client,
         body=StartUploadRequest(
             filename=filename,
-            content_type="application/octet-stream",
-            user_id="minio_user",
+            content_type=args.content_type,
+            user_id=args.user_id,
         ),
     )
     logger.info(f"Started new upload - ID: {response.upload_id}, Key: {response.key}")
@@ -144,7 +147,7 @@ async def complete_upload(
 
 
 async def get_existing_or_start_upload(
-    client: Client, filename_to_upload: str
+    args, client: Client, filename_to_upload: str
 ) -> tuple[StartUploadResponse, int]:
     """
     Get an existing upload session or start a new one for the specified file.
@@ -213,7 +216,7 @@ async def get_existing_or_start_upload(
             logger.error(f"Error getting last part {e.status_code}: {msg}")
     else:
         logger.info("No existing uploads found, starting new upload")
-        upload = await start_upload(client, filename_to_upload)
+        upload = await start_upload(args, client, filename_to_upload)
 
     return upload, last_part_number
 
@@ -417,22 +420,29 @@ Examples:
     # Server configuration
     parser.add_argument(
         "--base-url",
-        default="https://localhost:8000",
-        help=f"Base URL of the upload service (default: https://localhost:8000)",
+        default=DEFAULT_BASE_URL,
+        help=f"Base URL of the upload service (default: {DEFAULT_BASE_URL})",
     )
 
     parser.add_argument(
         "--user-id",
-        default="minio_user",
-        help=f"User ID for the upload (default: minio_user)",
+        default=DEFAULT_USER_ID,
+        help=f"User ID for the upload (default: {DEFAULT_USER_ID})",
     )
 
     # Upload configuration
     parser.add_argument(
         "--chunk-size",
         type=int,
-        default=CHUNK_SIZE,
-        help=f"Size of each chunk in MB (default: {CHUNK_SIZE})",
+        default=CHUNK_SIZE_MB,
+        help=f"Size of each chunk in MB (default: {CHUNK_SIZE_MB}). Warning: exclusive with --num-chunks",
+    )
+
+    parser.add_argument(
+        "--num-chunks",
+        type=int,
+        default=1,
+        help=f"Number of chunks (default: 1). Warning: exclusive with --chunk-size",
     )
 
     parser.add_argument(
@@ -470,39 +480,33 @@ async def upload_simple(args, client, upload, last_part_number):
     """Simple upload mode - uploads all chunks at once."""
     logger.info("Using simple upload mode")
     upload_responses = await upload_chunks(
-        client, args.file, upload, last_part_number, CHUNK_SIZE
+        client, args.file, upload, last_part_number, args.chunk_size
     )
     await register_uploaded_parts(
-        client, "minio_user", upload, upload_responses, last_part_number
+        client, args.user_id, upload, upload_responses, last_part_number
     )
 
 
 async def upload_batched(args, client, upload, last_part_number):
     """Batched upload mode - processes file in chunks to limit concurrent uploads."""
-    file_size = args.file.stat().st_size
-    num_chunks = math.ceil(file_size / CHUNK_SIZE)
-
     logger.info("Using batched upload mode")
-    logger.info(
-        f"File size: {file_size >> 20}MB, Chunks: {num_chunks}, Chunk size: {CHUNK_SIZE >> 20}MB"
-    )
-    logger.info(f"Max concurrent uploads per batch: {MAX_CONCURRENT_UPLOADS}")
+    logger.info(f"Max concurrent uploads per batch: {args.max_concurrent}")
 
-    for batch_idx in range(0, num_chunks, MAX_CONCURRENT_UPLOADS):
-        batch_num = batch_idx // MAX_CONCURRENT_UPLOADS + 1
-        remaining_chunks = min(MAX_CONCURRENT_UPLOADS, num_chunks - batch_idx)
+    for batch_idx in range(0, args.num_chunks, args.max_concurrent):
+        batch_num = batch_idx // args.max_concurrent + 1
+        remaining_chunks = min(args.max_concurrent, args.num_chunks - batch_idx)
         logger.info(f"Processing batch {batch_num} ({remaining_chunks} chunks)")
         upload_responses = await upload_chunks(
             client,
             args.file,
             upload,
             last_part_number,
-            CHUNK_SIZE,
+            args.chunk_size,
             batch_idx,
-            MAX_CONCURRENT_UPLOADS,
+            args.max_concurrent,
         )
         await register_uploaded_parts(
-            client, "minio_user", upload, upload_responses, batch_idx
+            client, args.user_id, upload, upload_responses, batch_idx
         )
 
 
@@ -517,34 +521,52 @@ async def main():
 
     # Validate file exists
     if not args.file.exists():
-        print(f"Error: File '{args.file}' does not exist", file=sys.stderr)
+        logger.error(f"File '{args.file}' does not exist")
         sys.exit(1)
 
     if not args.file.is_file():
-        print(f"Error: '{args.file}' is not a regular file", file=sys.stderr)
+        logger.error(f"'{args.file}' is not a regular file")
         sys.exit(1)
 
     filename_to_upload = args.file.name
-    user_id = "minio_user"
+
+    # Validate arguments
+    if args.chunk_size <= 5 or args.chunk_size > 5000:
+        logger.error("Chunk size range is 5 MiB to 5 GiB")
+        sys.exit(1)
+
+    # Convert chunk size from MB to bytes
+    args.chunk_size *= 1024 * 1024
+
+    file_size = args.file.stat().st_size
+    args.num_chunks = math.ceil(file_size / args.chunk_size)
+
+    if args.num_chunks > 10_000:
+        logger.error("Max number of chunks per upload is 10,000")
+        sys.exit(1)
+
+    logger.info(
+        f"File size: {file_size >> 20}MB, chunks: {args.num_chunks}, chunk size: {args.chunk_size >> 20}MB"
+    )
 
     if args.log_level == "DEBUG":
         print(f"Uploading: {args.file}")
         print(f"File size: {args.file.stat().st_size} bytes")
-        print(f"Chunk size: {CHUNK_SIZE} bytes")
-        print(f"Base URL: https://localhost:8000")
-        print(f"User ID: {user_id}")
-        print(f"Content type: application/octet-stream")
+        print(f"Chunk size: {args.chunk_size} bytes")
+        print(f"Base URL: {args.base_url}")
+        print(f"User ID: {args.user_id}")
+        print(f"Content type: {args.content_type}")
         print(f"Upload mode: {'Batched' if args.batched else 'Simple'}")
 
     try:
         async with Client(
-            base_url="http://localhost:8000", raise_on_unexpected_status=True
+            base_url=args.base_url, raise_on_unexpected_status=True
         ) as client:
             # First check if there's an upload for that file that is not completed
             # in the database. If there are multiple, use the one with the most recent
             # created_at field and delete the others.
             upload, last_part_number = await get_existing_or_start_upload(
-                client, filename_to_upload
+                args, client, filename_to_upload
             )
 
             if args.batched:
@@ -553,7 +575,7 @@ async def main():
                 await upload_simple(args, client, upload, last_part_number)
 
             logger.info("Completing upload")
-            response = await complete_upload(client, upload.upload_id, upload.key, user_id)
+            response = await complete_upload(client, upload.upload_id, upload.key, args.user_id)
             logger.info(f"✅ {response.message}")
             if response.location:
                 logger.info(f"File location: {response.location}")
@@ -566,47 +588,6 @@ async def main():
             import traceback
             traceback.print_exc()
         sys.exit(1)
-
-
-async def main_batched():
-    # TODO: setup argparse
-    filename_to_upload = "file.bin"
-    file_to_upload = Path(filename_to_upload)
-    file_size = file_to_upload.stat().st_size
-    user_id = "minio_user"
-
-    num_chunks = math.ceil(file_size / CHUNK_SIZE)
-    print(
-        f"file_size={file_size >> 20}MB num_chunks={num_chunks} chunk_size={CHUNK_SIZE >> 20}MB"
-    )
-
-    async with Client(
-        base_url="http://localhost:8000", raise_on_unexpected_status=True
-    ) as client:
-        # First check if there's an upload for that file that is not completed
-        # in the database. If there are multiple, use the one with the most recent
-        # created_at field and delete the others.
-        upload, last_part_number = await get_existing_or_start_upload(
-            client, filename_to_upload
-        )
-
-        for batch_idx in range(0, num_chunks, MAX_CONCURRENT_UPLOADS):
-            print(f"Processing batch {batch_idx // MAX_CONCURRENT_UPLOADS + 1}")
-            upload_responses = await upload_chunks(
-                client,
-                file_to_upload,
-                upload,
-                last_part_number,
-                CHUNK_SIZE,
-                batch_idx,
-                MAX_CONCURRENT_UPLOADS,
-            )
-            await register_uploaded_parts(
-                client, user_id, upload, upload_responses, last_part_number, batch_idx
-            )
-
-        response = await complete_upload(client, upload.upload_id, upload.key, user_id)
-        print(f"{response.message} : {response.location}")
 
 
 if __name__ == "__main__":

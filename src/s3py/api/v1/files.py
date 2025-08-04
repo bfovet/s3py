@@ -29,7 +29,7 @@ from s3py.models import (
 )
 from s3py.s3 import s3_client, S3_BUCKET_NAME
 
-router = APIRouter(tags=["files"])
+router = APIRouter(prefix="/files", tags=["files"])
 
 
 @router.get(
@@ -87,6 +87,34 @@ async def get_upload(
     return upload
 
 
+@router.delete(
+    "/uploads/{upload_id}",
+    summary="Delete an upload",
+    description="Deletes an upload given its id",
+    status_code=HTTP_200_OK,
+    response_model=DeleteUploadResponse,
+)
+async def delete_upload(db: Annotated[AsyncSession, Depends(get_db)], upload_id: str):
+    """
+    Delete an upload.
+    """
+    result = await db.execute(select(Upload).where(Upload.upload_id == upload_id))
+    upload = result.scalars().one_or_none()
+    if not upload:
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND,
+            detail=f"Upload with id {upload_id} not found",
+        )
+
+    await db.delete(upload)
+    await db.commit()
+
+    return {
+        "message": f"Upload '{upload.upload_id}' deleted successfully",
+        "deleted_upload": upload,
+    }
+
+
 @router.get(
     "/uploads/{upload_id}/parts",
     summary="Get upload parts",
@@ -123,8 +151,8 @@ async def get_parts(
 
 @router.get(
     "/uploads/{upload_id}/last-part",
-    summary="Get upload parts",
-    description="Get a list of parts of an upload given its id",
+    summary="Get an upload last part",
+    description="Get the last part of an upload given its id",
     status_code=HTTP_200_OK,
     response_model=UploadPartPublic,
 )
@@ -152,36 +180,8 @@ async def get_last_part(
     return part
 
 
-@router.delete(
-    "/uploads/{upload_id}",
-    summary="Delete an upload",
-    description="Deletes an upload given its id",
-    status_code=HTTP_200_OK,
-    response_model=DeleteUploadResponse,
-)
-async def delete_upload(db: Annotated[AsyncSession, Depends(get_db)], upload_id: str):
-    """
-    Delete an upload.
-    """
-    result = await db.execute(select(Upload).where(Upload.upload_id == upload_id))
-    upload = result.scalars().one_or_none()
-    if not upload:
-        raise HTTPException(
-            status_code=HTTP_404_NOT_FOUND,
-            detail=f"Upload with id {upload_id} not found",
-        )
-
-    await db.delete(upload)
-    await db.commit()
-
-    return {
-        "message": f"Upload '{upload.upload_id}' deleted successfully",
-        "deleted_upload": upload,
-    }
-
-
 @router.post(
-    "/start-upload",
+    "/uploads/multipart",
     summary="Initialize a multipart file upload",
     description="Creates a new multipart upload session in S3 and records it in the database",
     status_code=HTTP_201_CREATED,
@@ -226,13 +226,13 @@ async def start_upload(
 
 
 @router.get(
-    "/presigned-url",
+    "/uploads/{upload_id}/parts/{part_id}/presigned-url",
     summary="Get a presigned URL for part upload",
     description="Generates a presigned URL that allows direct upload to S3",
     status_code=HTTP_200_OK,
     response_model=PresignedUrlResponse,
 )
-def get_presigned_url(upload_id: str, key: str, part_number: int) -> dict[str, str]:
+def get_presigned_url(upload_id: str, key: str, part_id: int) -> dict[str, str]:
     """
     Generate a presigned URL for uploading a specific part:
 
@@ -242,13 +242,15 @@ def get_presigned_url(upload_id: str, key: str, part_number: int) -> dict[str, s
 
     The client should request a new URL for each part they need to upload.
     """
+    # TODO: get key for upload_id so there is no need to pass it
+
     # TODO: needs to be async
     presigned_url = s3_client.generate_presigned_url(
         "upload_part",
         Params={
             "Bucket": S3_BUCKET_NAME,
             "Key": key,
-            "PartNumber": part_number,
+            "PartNumber": part_id,
             "UploadId": upload_id,
         },
         ExpiresIn=3600,
@@ -258,7 +260,7 @@ def get_presigned_url(upload_id: str, key: str, part_number: int) -> dict[str, s
 
 
 @router.post(
-    "/upload-part",
+    "/uploads/{upload_id}/parts/{part_id}",
     summary="Record a successfully uploaded part",
     description="Updates the database with information about an uploaded part",
     status_code=HTTP_201_CREATED,
@@ -308,7 +310,7 @@ async def upload_part(
 
 
 @router.post(
-    "/complete-upload",
+    "/uploads/{upload_id}/multipart",
     summary="Complete the multipart upload",
     description="Finalizes the multipart upload by combining all parts in S3",
     status_code=HTTP_201_CREATED,
@@ -347,6 +349,7 @@ async def complete_upload(
 
     # Validate parts before attempting to complete
     try:
+        # TODO: replace this with a call to /uploads/{upload_id}/parts ?
         # TODO: needs to be async
         parts_response = s3_client.list_parts(
             Bucket=S3_BUCKET_NAME, Key=request.key, UploadId=request.upload_id

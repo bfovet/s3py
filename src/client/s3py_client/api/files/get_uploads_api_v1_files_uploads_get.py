@@ -6,16 +6,39 @@ import httpx
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.http_validation_error import HTTPValidationError
-from ...models.upload_part_public import UploadPartPublic
-from ...types import Response
+from ...models.upload_response import UploadResponse
+from ...models.upload_status import UploadStatus
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
-    upload_id: str,
+    *,
+    key: str,
+    upload_status: Union[None, Unset, list[UploadStatus]] = UNSET,
 ) -> dict[str, Any]:
+    params: dict[str, Any] = {}
+
+    params["key"] = key
+
+    json_upload_status: Union[None, Unset, list[str]]
+    if isinstance(upload_status, Unset):
+        json_upload_status = UNSET
+    elif isinstance(upload_status, list):
+        json_upload_status = []
+        for upload_status_type_0_item_data in upload_status:
+            upload_status_type_0_item = upload_status_type_0_item_data.value
+            json_upload_status.append(upload_status_type_0_item)
+
+    else:
+        json_upload_status = upload_status
+    params["upload_status"] = json_upload_status
+
+    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
+
     _kwargs: dict[str, Any] = {
         "method": "get",
-        "url": f"/api/v1/uploads/{upload_id}/parts",
+        "url": "/api/v1/files/uploads",
+        "params": params,
     }
 
     return _kwargs
@@ -23,12 +46,12 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Optional[Union[HTTPValidationError, list["UploadPartPublic"]]]:
+) -> Optional[Union[HTTPValidationError, list["UploadResponse"]]]:
     if response.status_code == 200:
         response_200 = []
         _response_200 = response.json()
         for response_200_item_data in _response_200:
-            response_200_item = UploadPartPublic.from_dict(response_200_item_data)
+            response_200_item = UploadResponse.from_dict(response_200_item_data)
 
             response_200.append(response_200_item)
 
@@ -45,7 +68,7 @@ def _parse_response(
 
 def _build_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Response[Union[HTTPValidationError, list["UploadPartPublic"]]]:
+) -> Response[Union[HTTPValidationError, list["UploadResponse"]]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -55,27 +78,30 @@ def _build_response(
 
 
 def sync_detailed(
-    upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-) -> Response[Union[HTTPValidationError, list["UploadPartPublic"]]]:
-    """Get upload parts
+    key: str,
+    upload_status: Union[None, Unset, list[UploadStatus]] = UNSET,
+) -> Response[Union[HTTPValidationError, list["UploadResponse"]]]:
+    """List all uploads for a file
 
-     Get a list of parts of an upload given its id
+     Gets a list of uploads for a file, optionally filtered by status
 
     Args:
-        upload_id (str):
+        key (str):
+        upload_status (Union[None, Unset, list[UploadStatus]]):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, list['UploadPartPublic']]]
+        Response[Union[HTTPValidationError, list['UploadResponse']]]
     """
 
     kwargs = _get_kwargs(
-        upload_id=upload_id,
+        key=key,
+        upload_status=upload_status,
     )
 
     response = client.get_httpx_client().request(
@@ -86,53 +112,59 @@ def sync_detailed(
 
 
 def sync(
-    upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-) -> Optional[Union[HTTPValidationError, list["UploadPartPublic"]]]:
-    """Get upload parts
+    key: str,
+    upload_status: Union[None, Unset, list[UploadStatus]] = UNSET,
+) -> Optional[Union[HTTPValidationError, list["UploadResponse"]]]:
+    """List all uploads for a file
 
-     Get a list of parts of an upload given its id
+     Gets a list of uploads for a file, optionally filtered by status
 
     Args:
-        upload_id (str):
+        key (str):
+        upload_status (Union[None, Unset, list[UploadStatus]]):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, list['UploadPartPublic']]
+        Union[HTTPValidationError, list['UploadResponse']]
     """
 
     return sync_detailed(
-        upload_id=upload_id,
         client=client,
+        key=key,
+        upload_status=upload_status,
     ).parsed
 
 
 async def asyncio_detailed(
-    upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-) -> Response[Union[HTTPValidationError, list["UploadPartPublic"]]]:
-    """Get upload parts
+    key: str,
+    upload_status: Union[None, Unset, list[UploadStatus]] = UNSET,
+) -> Response[Union[HTTPValidationError, list["UploadResponse"]]]:
+    """List all uploads for a file
 
-     Get a list of parts of an upload given its id
+     Gets a list of uploads for a file, optionally filtered by status
 
     Args:
-        upload_id (str):
+        key (str):
+        upload_status (Union[None, Unset, list[UploadStatus]]):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, list['UploadPartPublic']]]
+        Response[Union[HTTPValidationError, list['UploadResponse']]]
     """
 
     kwargs = _get_kwargs(
-        upload_id=upload_id,
+        key=key,
+        upload_status=upload_status,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -141,28 +173,31 @@ async def asyncio_detailed(
 
 
 async def asyncio(
-    upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-) -> Optional[Union[HTTPValidationError, list["UploadPartPublic"]]]:
-    """Get upload parts
+    key: str,
+    upload_status: Union[None, Unset, list[UploadStatus]] = UNSET,
+) -> Optional[Union[HTTPValidationError, list["UploadResponse"]]]:
+    """List all uploads for a file
 
-     Get a list of parts of an upload given its id
+     Gets a list of uploads for a file, optionally filtered by status
 
     Args:
-        upload_id (str):
+        key (str):
+        upload_status (Union[None, Unset, list[UploadStatus]]):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, list['UploadPartPublic']]
+        Union[HTTPValidationError, list['UploadResponse']]
     """
 
     return (
         await asyncio_detailed(
-            upload_id=upload_id,
             client=client,
+            key=key,
+            upload_status=upload_status,
         )
     ).parsed

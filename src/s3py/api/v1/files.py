@@ -1,5 +1,6 @@
 from typing import Annotated, Sequence
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.params import Depends
 from sqlalchemy import select, or_
@@ -267,7 +268,10 @@ def get_presigned_url(upload_id: str, key: str, part_id: int) -> dict[str, str]:
     response_model=UploadPartResponse,
 )
 async def upload_part(
-    request: UploadPartRequest, db: Annotated[AsyncSession, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)],
+    upload_id: str,
+    part_id: int,
+    etag: str,
 ) -> dict[str, bool]:
     """
     Record a part that was successfully uploaded to S3:
@@ -278,11 +282,13 @@ async def upload_part(
 
     The client should call this after successfully uploading a part using the presigned URL.
     """
+    upload = await get_upload(db, upload_id)
+
     result = await db.execute(
         select(Upload).where(
-            Upload.upload_id == request.upload_id,
-            Upload.key == request.key,
-            Upload.user_id == request.user_id,
+            Upload.upload_id == upload.upload_id,
+            Upload.key == upload.key,
+            Upload.user_id == upload.user_id,
         )
     )
 
@@ -291,11 +297,11 @@ async def upload_part(
         raise HTTPException(status_code=404, detail="Upload not found")
 
     part = Part(
-        upload_id=request.upload_id,
-        user_id=request.user_id,
-        key=request.key,
-        etag=request.etag,
-        part_number=request.part_number,
+        upload_id=upload.upload_id,
+        user_id=upload.user_id,
+        key=upload.key,
+        etag=etag,
+        part_number=part_id,
         upload=upload,
     )
     db.add(part)
@@ -317,7 +323,7 @@ async def upload_part(
     response_model=CompleteUploadResponse,
 )
 async def complete_upload(
-    request: CompleteUploadRequest, db: Annotated[AsyncSession, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)], upload_id: str
 ) -> dict[str, str]:
     """
     Complete a multipart upload by combining all uploaded parts:
@@ -329,13 +335,15 @@ async def complete_upload(
 
     This should be called after all parts have been successfully uploaded.
     """
+    upload = await get_upload(db, upload_id)
+
     result = await db.execute(
         select(Upload)
         .options(selectinload(Upload.parts))  # Eagerly load the parts relationship
         .where(
-            Upload.upload_id == request.upload_id,
-            Upload.key == request.key,
-            Upload.user_id == request.user_id,
+            Upload.upload_id == upload.upload_id,
+            Upload.key == upload.key,
+            Upload.user_id == upload.user_id,
         )
     )
 
@@ -351,8 +359,9 @@ async def complete_upload(
     try:
         # TODO: replace this with a call to /uploads/{upload_id}/parts ?
         # TODO: needs to be async
+        # parts_response = await get_parts(db, upload_id)
         parts_response = s3_client.list_parts(
-            Bucket=S3_BUCKET_NAME, Key=request.key, UploadId=request.upload_id
+            Bucket=S3_BUCKET_NAME, Key=upload.key, UploadId=upload.upload_id
         )
 
         s3_parts = {
@@ -382,8 +391,8 @@ async def complete_upload(
 
         payload = {
             "Bucket": S3_BUCKET_NAME,
-            "Key": request.key,
-            "UploadId": request.upload_id,
+            "Key": upload.key,
+            "UploadId": upload.upload_id,
             "MultipartUpload": {
                 "Parts": [
                     {"ETag": part.etag, "PartNumber": part.part_number}
@@ -409,7 +418,7 @@ async def complete_upload(
         try:
             # TODO: needs to be async
             s3_client.abort_multipart_upload(
-                Bucket=S3_BUCKET_NAME, Key=request.key, UploadId=request.upload_id
+                Bucket=S3_BUCKET_NAME, Key=upload.key, UploadId=upload.upload_id
             )
             print("Multipart upload aborted")
         except Exception as abort_error:

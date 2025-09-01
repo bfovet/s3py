@@ -5,38 +5,34 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
-from ...models.complete_upload_request import CompleteUploadRequest
-from ...models.complete_upload_response import CompleteUploadResponse
 from ...models.http_validation_error import HTTPValidationError
+from ...models.upload_response import UploadResponse
 from ...types import Response
 
 
 def _get_kwargs(
-    *,
-    body: CompleteUploadRequest,
+    upload_id: str,
 ) -> dict[str, Any]:
-    headers: dict[str, Any] = {}
-
     _kwargs: dict[str, Any] = {
-        "method": "post",
-        "url": "/api/v1/complete-upload",
+        "method": "get",
+        "url": f"/api/v1/files/uploads/{upload_id}",
     }
 
-    _kwargs["json"] = body.to_dict()
-
-    headers["Content-Type"] = "application/json"
-
-    _kwargs["headers"] = headers
     return _kwargs
 
 
 def _parse_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Optional[Union[CompleteUploadResponse, HTTPValidationError]]:
-    if response.status_code == 201:
-        response_201 = CompleteUploadResponse.from_dict(response.json())
+) -> Optional[Union[HTTPValidationError, list["UploadResponse"]]]:
+    if response.status_code == 200:
+        response_200 = []
+        _response_200 = response.json()
+        for response_200_item_data in _response_200:
+            response_200_item = UploadResponse.from_dict(response_200_item_data)
 
-        return response_201
+            response_200.append(response_200_item)
+
+        return response_200
     if response.status_code == 422:
         response_422 = HTTPValidationError.from_dict(response.json())
 
@@ -49,7 +45,7 @@ def _parse_response(
 
 def _build_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Response[Union[CompleteUploadResponse, HTTPValidationError]]:
+) -> Response[Union[HTTPValidationError, list["UploadResponse"]]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -59,27 +55,27 @@ def _build_response(
 
 
 def sync_detailed(
+    upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-    body: CompleteUploadRequest,
-) -> Response[Union[CompleteUploadResponse, HTTPValidationError]]:
-    """Complete the multipart upload
+) -> Response[Union[HTTPValidationError, list["UploadResponse"]]]:
+    """Get an upload
 
-     Finalizes the multipart upload by combining all parts in S3
+     Gets an upload by its id
 
     Args:
-        body (CompleteUploadRequest):
+        upload_id (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[CompleteUploadResponse, HTTPValidationError]]
+        Response[Union[HTTPValidationError, list['UploadResponse']]]
     """
 
     kwargs = _get_kwargs(
-        body=body,
+        upload_id=upload_id,
     )
 
     response = client.get_httpx_client().request(
@@ -90,53 +86,53 @@ def sync_detailed(
 
 
 def sync(
+    upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-    body: CompleteUploadRequest,
-) -> Optional[Union[CompleteUploadResponse, HTTPValidationError]]:
-    """Complete the multipart upload
+) -> Optional[Union[HTTPValidationError, list["UploadResponse"]]]:
+    """Get an upload
 
-     Finalizes the multipart upload by combining all parts in S3
+     Gets an upload by its id
 
     Args:
-        body (CompleteUploadRequest):
+        upload_id (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[CompleteUploadResponse, HTTPValidationError]
+        Union[HTTPValidationError, list['UploadResponse']]
     """
 
     return sync_detailed(
+        upload_id=upload_id,
         client=client,
-        body=body,
     ).parsed
 
 
 async def asyncio_detailed(
+    upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-    body: CompleteUploadRequest,
-) -> Response[Union[CompleteUploadResponse, HTTPValidationError]]:
-    """Complete the multipart upload
+) -> Response[Union[HTTPValidationError, list["UploadResponse"]]]:
+    """Get an upload
 
-     Finalizes the multipart upload by combining all parts in S3
+     Gets an upload by its id
 
     Args:
-        body (CompleteUploadRequest):
+        upload_id (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[CompleteUploadResponse, HTTPValidationError]]
+        Response[Union[HTTPValidationError, list['UploadResponse']]]
     """
 
     kwargs = _get_kwargs(
-        body=body,
+        upload_id=upload_id,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -145,28 +141,28 @@ async def asyncio_detailed(
 
 
 async def asyncio(
+    upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-    body: CompleteUploadRequest,
-) -> Optional[Union[CompleteUploadResponse, HTTPValidationError]]:
-    """Complete the multipart upload
+) -> Optional[Union[HTTPValidationError, list["UploadResponse"]]]:
+    """Get an upload
 
-     Finalizes the multipart upload by combining all parts in S3
+     Gets an upload by its id
 
     Args:
-        body (CompleteUploadRequest):
+        upload_id (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[CompleteUploadResponse, HTTPValidationError]
+        Union[HTTPValidationError, list['UploadResponse']]
     """
 
     return (
         await asyncio_detailed(
+            upload_id=upload_id,
             client=client,
-            body=body,
         )
     ).parsed

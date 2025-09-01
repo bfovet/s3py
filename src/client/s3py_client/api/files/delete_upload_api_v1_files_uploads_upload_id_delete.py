@@ -5,8 +5,8 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.delete_upload_response import DeleteUploadResponse
 from ...models.http_validation_error import HTTPValidationError
-from ...models.upload_part_public import UploadPartPublic
 from ...types import Response
 
 
@@ -14,8 +14,8 @@ def _get_kwargs(
     upload_id: str,
 ) -> dict[str, Any]:
     _kwargs: dict[str, Any] = {
-        "method": "get",
-        "url": f"/api/v1/uploads/{upload_id}/last-part",
+        "method": "delete",
+        "url": f"/api/v1/files/uploads/{upload_id}",
     }
 
     return _kwargs
@@ -23,9 +23,9 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Optional[Union[HTTPValidationError, UploadPartPublic]]:
+) -> Optional[Union[DeleteUploadResponse, HTTPValidationError]]:
     if response.status_code == 200:
-        response_200 = UploadPartPublic.from_dict(response.json())
+        response_200 = DeleteUploadResponse.from_dict(response.json())
 
         return response_200
     if response.status_code == 422:
@@ -40,7 +40,7 @@ def _parse_response(
 
 def _build_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Response[Union[HTTPValidationError, UploadPartPublic]]:
+) -> Response[Union[DeleteUploadResponse, HTTPValidationError]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -53,10 +53,10 @@ def sync_detailed(
     upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-) -> Response[Union[HTTPValidationError, UploadPartPublic]]:
-    """Get upload parts
+) -> Response[Union[DeleteUploadResponse, HTTPValidationError]]:
+    """Delete an upload
 
-     Get a list of parts of an upload given its id
+     Deletes an upload given its id
 
     Args:
         upload_id (str):
@@ -66,7 +66,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, UploadPartPublic]]
+        Response[Union[DeleteUploadResponse, HTTPValidationError]]
     """
 
     kwargs = _get_kwargs(
@@ -84,10 +84,10 @@ def sync(
     upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-) -> Optional[Union[HTTPValidationError, UploadPartPublic]]:
-    """Get upload parts
+) -> Optional[Union[DeleteUploadResponse, HTTPValidationError]]:
+    """Delete an upload
 
-     Get a list of parts of an upload given its id
+     Deletes an upload given its id
 
     Args:
         upload_id (str):
@@ -97,7 +97,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, UploadPartPublic]
+        Union[DeleteUploadResponse, HTTPValidationError]
     """
 
     return sync_detailed(
@@ -110,10 +110,10 @@ async def asyncio_detailed(
     upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-) -> Response[Union[HTTPValidationError, UploadPartPublic]]:
-    """Get upload parts
+) -> Response[Union[DeleteUploadResponse, HTTPValidationError]]:
+    """Delete an upload
 
-     Get a list of parts of an upload given its id
+     Deletes an upload given its id
 
     Args:
         upload_id (str):
@@ -123,7 +123,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, UploadPartPublic]]
+        Response[Union[DeleteUploadResponse, HTTPValidationError]]
     """
 
     kwargs = _get_kwargs(
@@ -139,10 +139,10 @@ async def asyncio(
     upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-) -> Optional[Union[HTTPValidationError, UploadPartPublic]]:
-    """Get upload parts
+) -> Optional[Union[DeleteUploadResponse, HTTPValidationError]]:
+    """Delete an upload
 
-     Get a list of parts of an upload given its id
+     Deletes an upload given its id
 
     Args:
         upload_id (str):
@@ -152,7 +152,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, UploadPartPublic]
+        Union[DeleteUploadResponse, HTTPValidationError]
     """
 
     return (

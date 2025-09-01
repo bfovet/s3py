@@ -6,37 +6,33 @@ import httpx
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.http_validation_error import HTTPValidationError
-from ...models.upload_part_request import UploadPartRequest
-from ...models.upload_part_response import UploadPartResponse
+from ...models.upload_part_public import UploadPartPublic
 from ...types import Response
 
 
 def _get_kwargs(
-    *,
-    body: UploadPartRequest,
+    upload_id: str,
 ) -> dict[str, Any]:
-    headers: dict[str, Any] = {}
-
     _kwargs: dict[str, Any] = {
-        "method": "post",
-        "url": "/api/v1/upload-part",
+        "method": "get",
+        "url": f"/api/v1/files/uploads/{upload_id}/parts",
     }
 
-    _kwargs["json"] = body.to_dict()
-
-    headers["Content-Type"] = "application/json"
-
-    _kwargs["headers"] = headers
     return _kwargs
 
 
 def _parse_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Optional[Union[HTTPValidationError, UploadPartResponse]]:
-    if response.status_code == 201:
-        response_201 = UploadPartResponse.from_dict(response.json())
+) -> Optional[Union[HTTPValidationError, list["UploadPartPublic"]]]:
+    if response.status_code == 200:
+        response_200 = []
+        _response_200 = response.json()
+        for response_200_item_data in _response_200:
+            response_200_item = UploadPartPublic.from_dict(response_200_item_data)
 
-        return response_201
+            response_200.append(response_200_item)
+
+        return response_200
     if response.status_code == 422:
         response_422 = HTTPValidationError.from_dict(response.json())
 
@@ -49,7 +45,7 @@ def _parse_response(
 
 def _build_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Response[Union[HTTPValidationError, UploadPartResponse]]:
+) -> Response[Union[HTTPValidationError, list["UploadPartPublic"]]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -59,27 +55,27 @@ def _build_response(
 
 
 def sync_detailed(
+    upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-    body: UploadPartRequest,
-) -> Response[Union[HTTPValidationError, UploadPartResponse]]:
-    """Record a successfully uploaded part
+) -> Response[Union[HTTPValidationError, list["UploadPartPublic"]]]:
+    """Get upload parts
 
-     Updates the database with information about an uploaded part
+     Get a list of parts of an upload given its id
 
     Args:
-        body (UploadPartRequest):
+        upload_id (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, UploadPartResponse]]
+        Response[Union[HTTPValidationError, list['UploadPartPublic']]]
     """
 
     kwargs = _get_kwargs(
-        body=body,
+        upload_id=upload_id,
     )
 
     response = client.get_httpx_client().request(
@@ -90,53 +86,53 @@ def sync_detailed(
 
 
 def sync(
+    upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-    body: UploadPartRequest,
-) -> Optional[Union[HTTPValidationError, UploadPartResponse]]:
-    """Record a successfully uploaded part
+) -> Optional[Union[HTTPValidationError, list["UploadPartPublic"]]]:
+    """Get upload parts
 
-     Updates the database with information about an uploaded part
+     Get a list of parts of an upload given its id
 
     Args:
-        body (UploadPartRequest):
+        upload_id (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, UploadPartResponse]
+        Union[HTTPValidationError, list['UploadPartPublic']]
     """
 
     return sync_detailed(
+        upload_id=upload_id,
         client=client,
-        body=body,
     ).parsed
 
 
 async def asyncio_detailed(
+    upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-    body: UploadPartRequest,
-) -> Response[Union[HTTPValidationError, UploadPartResponse]]:
-    """Record a successfully uploaded part
+) -> Response[Union[HTTPValidationError, list["UploadPartPublic"]]]:
+    """Get upload parts
 
-     Updates the database with information about an uploaded part
+     Get a list of parts of an upload given its id
 
     Args:
-        body (UploadPartRequest):
+        upload_id (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, UploadPartResponse]]
+        Response[Union[HTTPValidationError, list['UploadPartPublic']]]
     """
 
     kwargs = _get_kwargs(
-        body=body,
+        upload_id=upload_id,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -145,28 +141,28 @@ async def asyncio_detailed(
 
 
 async def asyncio(
+    upload_id: str,
     *,
     client: Union[AuthenticatedClient, Client],
-    body: UploadPartRequest,
-) -> Optional[Union[HTTPValidationError, UploadPartResponse]]:
-    """Record a successfully uploaded part
+) -> Optional[Union[HTTPValidationError, list["UploadPartPublic"]]]:
+    """Get upload parts
 
-     Updates the database with information about an uploaded part
+     Get a list of parts of an upload given its id
 
     Args:
-        body (UploadPartRequest):
+        upload_id (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, UploadPartResponse]
+        Union[HTTPValidationError, list['UploadPartPublic']]
     """
 
     return (
         await asyncio_detailed(
+            upload_id=upload_id,
             client=client,
-            body=body,
         )
     ).parsed

@@ -13,8 +13,6 @@ from client.s3py_client import Client
 from client.s3py_client.errors import UnexpectedStatus
 from client.s3py_client.models import (
     StartUploadRequest,
-    UploadPartRequest,
-    CompleteUploadRequest,
     StartUploadResponse,
     PresignedUrlResponse,
     UploadPartResponse,
@@ -22,12 +20,12 @@ from client.s3py_client.models import (
     UploadStatus,
 )
 from client.s3py_client.api.files import (
-    get_uploads_api_v1_uploads_get,
-    get_last_part_api_v1_uploads_upload_id_last_part_get,
-    start_upload_api_v1_start_upload_post,
-    get_presigned_url_api_v1_presigned_url_get,
-    upload_part_api_v1_upload_part_post,
-    complete_upload_api_v1_complete_upload_post,
+    start_upload_api_v1_files_uploads_multipart_post,
+    get_presigned_url_api_v1_files_uploads_upload_id_parts_part_id_presigned_url_get,
+    upload_part_api_v1_files_uploads_upload_id_parts_part_id_post,
+    complete_upload_api_v1_files_uploads_upload_id_multipart_post,
+    get_uploads_api_v1_files_uploads_get,
+    get_last_part_api_v1_files_uploads_upload_id_last_part_get
 )
 
 CHUNK_SIZE_MB = 5
@@ -88,7 +86,7 @@ class ChunkedBinaryReader:
 
 async def start_upload(args, client: Client, filename: str) -> StartUploadResponse:
     logger.debug(f"Starting upload for file: XXX, user_id: XXX, content_type: XXX")
-    response = await start_upload_api_v1_start_upload_post.asyncio(
+    response = await start_upload_api_v1_files_uploads_multipart_post.asyncio(
         client=client,
         body=StartUploadRequest(
             filename=filename,
@@ -103,9 +101,11 @@ async def start_upload(args, client: Client, filename: str) -> StartUploadRespon
 async def get_presigned_url(
     client: Client, upload_id: str, key: str, part_number: int
 ) -> PresignedUrlResponse:
-    logger.debug(f"Getting presigned URL for upload_id: {upload_id}, part: {part_number}")
-    response = await get_presigned_url_api_v1_presigned_url_get.asyncio(
-        client=client, upload_id=upload_id, key=key, part_number=part_number
+    logger.debug(
+        f"Getting presigned URL for upload_id: {upload_id}, part: {part_number}"
+    )
+    response = await get_presigned_url_api_v1_files_uploads_upload_id_parts_part_id_presigned_url_get.asyncio(
+        client=client, upload_id=upload_id, key=key, part_id=part_number
     )
     return response
 
@@ -122,15 +122,8 @@ async def upload_part(
     client: Client, upload_id: str, key: str, part_number: int, etag: str, user_id: str
 ) -> UploadPartResponse:
     logger.debug(f"Registering part {part_number} with ETag: {etag}")
-    request = UploadPartRequest(
-        upload_id=upload_id,
-        key=key,
-        part_number=part_number,
-        etag=etag,
-        user_id=user_id,
-    )
-    response = await upload_part_api_v1_upload_part_post.asyncio(
-        client=client, body=request
+    response = await upload_part_api_v1_files_uploads_upload_id_parts_part_id_post.asyncio(
+        client=client, upload_id=upload_id, part_id=part_number, etag=etag
     )
     return response
 
@@ -139,9 +132,8 @@ async def complete_upload(
     client: Client, upload_id: str, key: str, user_id: str
 ) -> CompleteUploadResponse:
     logger.info(f"Completing upload - ID: {upload_id}")
-    request = CompleteUploadRequest(upload_id=upload_id, key=key, user_id=user_id)
-    response = await complete_upload_api_v1_complete_upload_post.asyncio(
-        client=client, body=request
+    response = await complete_upload_api_v1_files_uploads_upload_id_multipart_post.asyncio(
+        client=client, upload_id=upload_id
     )
     return response
 
@@ -195,7 +187,7 @@ async def get_existing_or_start_upload(
     last_part_number = 0
 
     logger.info(f"Checking for existing uploads for file: {filename_to_upload}")
-    in_progress_uploads = await get_uploads_api_v1_uploads_get.asyncio(
+    in_progress_uploads = await get_uploads_api_v1_files_uploads_get.asyncio(
         client=client,
         key=filename_to_upload,
         upload_status=[UploadStatus.INITIATED, UploadStatus.IN_PROGRESS],
@@ -205,7 +197,7 @@ async def get_existing_or_start_upload(
         logger.info(f"Found existing upload: {upload.upload_id}")
         try:
             last_part = (
-                await get_last_part_api_v1_uploads_upload_id_last_part_get.asyncio(
+                await get_last_part_api_v1_files_uploads_upload_id_last_part_get.asyncio(
                     client=client, upload_id=upload.upload_id
                 )
             )
@@ -267,7 +259,9 @@ async def upload_chunks(
         - All upload tasks are executed concurrently for better performance
         - If any upload task fails, all tasks in the group are cancelled
     """
-    logger.debug(f"Starting chunk upload - batch_idx: {batch_idx}, batch_size: {batch_size}")
+    logger.debug(
+        f"Starting chunk upload - batch_idx: {batch_idx}, batch_size: {batch_size}"
+    )
 
     async with asyncio.TaskGroup() as tg:
         tasks = []
@@ -284,7 +278,9 @@ async def upload_chunks(
                 )
 
                 logger.info(f"Uploading chunk {part_idx} ({len(chunk)} bytes)")
-                logger.debug(f"Chunk {part_idx} presigned URL: {response.presigned_url}")
+                logger.debug(
+                    f"Chunk {part_idx} presigned URL: {response.presigned_url}"
+                )
 
                 task = tg.create_task(
                     upload_to_presigned_url(response.presigned_url, chunk)
@@ -336,9 +332,7 @@ async def register_uploaded_parts(
     """
     logger.info(f"Registering {len(upload_responses)} uploaded parts")
 
-    for index, upload_response in enumerate(
-        upload_responses, start=start_offset + 1
-    ):
+    for index, upload_response in enumerate(upload_responses, start=start_offset + 1):
         tag_from_header = upload_response.headers.get("ETag")
         if tag_from_header is None:
             raise ValueError(
@@ -462,15 +456,15 @@ Examples:
     parser.add_argument(
         "--batched",
         action="store_true",
-        help="Use batched upload mode for better memory efficiency with large files"
+        help="Use batched upload mode for better memory efficiency with large files",
     )
 
     # Logging configuration
     parser.add_argument(
         "--log-level",
-        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        default='INFO',
-        help="Set the logging level (default: INFO)"
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        default="INFO",
+        help="Set the logging level (default: INFO)",
     )
 
     return parser.parse_args()
@@ -575,7 +569,9 @@ async def main():
                 await upload_simple(args, client, upload, last_part_number)
 
             logger.info("Completing upload")
-            response = await complete_upload(client, upload.upload_id, upload.key, args.user_id)
+            response = await complete_upload(
+                client, upload.upload_id, upload.key, args.user_id
+            )
             logger.info(f"✅ {response.message}")
             if response.location:
                 logger.info(f"File location: {response.location}")
@@ -586,6 +582,7 @@ async def main():
         logger.info(f"❌ Upload failed: {e}")
         if args.log_level == "DEBUG":
             import traceback
+
             traceback.print_exc()
         sys.exit(1)
 

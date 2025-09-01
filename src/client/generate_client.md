@@ -1,0 +1,1 @@
+openapi-python-client generate --url http://localhost:8000/openapi.json --output-path [PATH]
